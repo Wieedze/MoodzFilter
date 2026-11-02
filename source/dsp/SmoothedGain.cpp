@@ -35,12 +35,14 @@ namespace moodz::dsp
         if (!std::isfinite (gainDb))
             return;
 
-        const float newTarget = decibelsToGain (std::clamp (gainDb, minDb, maxDb));
-        if (newTarget == targetGain)
+        // Called every block: recompute the linear gain only when the target really changes
+        const float clampedDb = std::clamp (gainDb, minDb, maxDb);
+        if (clampedDb == targetDb)
             return;
 
         // A new target restarts a full-length ramp from wherever the gain is now
-        targetGain = newTarget;
+        targetDb = clampedDb;
+        targetGain = decibelsToGain (clampedDb);
         samplesLeft = rampLengthSamples;
         step = (targetGain - currentGain) / static_cast<float> (rampLengthSamples);
     }

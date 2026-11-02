@@ -28,6 +28,7 @@ namespace moodz::dsp
     private:
         int rampLengthSamples = 1;
         float currentGain = 1.0f;
+        float targetDb = 0.0f;
         float targetGain = 1.0f;
         float step = 0.0f;
         int samplesLeft = 0;

@@ -45,13 +45,13 @@ The first vertical slice through every layer: the SPEC's `Gain out` parameter (â
 
 ## Definition of done
 
-* [ ] Each row of the table above is a test, written and seen red before the code.
-* [ ] `cmake --build` with no new warning (Debug and Release).
-* [ ] `ctest` green.
-* [ ] pluginval 10 green.
-* [ ] `rt-safety-reviewer` passed.
-* [ ] `GLOSSARY.md` up to date.
-* [ ] CI green.
+* [x] Each row of the table above is a test, written and seen red before the code.
+* [x] `cmake --build` with no new warning (Debug and Release).
+* [x] `ctest` green.
+* [x] pluginval 10 green.
+* [x] `rt-safety-reviewer` passed (no finding on the audio path; its 3 defensive suggestions applied in bf04265).
+* [x] `GLOSSARY.md` up to date (no new term: Params, Smoothing, Parameter ID, State already defined).
+* [x] CI green (run 41488213810 on bf04265, Linux and Windows).
 * [ ] `task-verifier`: pass.
 
 ## End note (filled by the task-verifier)

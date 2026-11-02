@@ -136,7 +136,8 @@ TEST_CASE ("SmoothedGain ignores a non-finite target", "[dsp][gain]")
 
 TEST_CASE ("SmoothedGain does not depend on the block size", "[dsp][gain]")
 {
-    // Deterministic noise (32-bit LCG, Numerical Recipes constants), gain change half way
+    // Deterministic noise (32-bit LCG, Numerical Recipes constants); the target goes from
+    // -6 dB to +12 dB exactly at sample 2048, whatever the block size.
     std::vector<float> input (4096);
     std::uint32_t state = 12345u;
     for (auto& s : input)
@@ -145,52 +146,42 @@ TEST_CASE ("SmoothedGain does not depend on the block size", "[dsp][gain]")
         s = static_cast<float> (state) / 4294967296.0f * 2.0f - 1.0f;
     }
 
+    constexpr int changeAt = 2048;
+    const int total = static_cast<int> (input.size());
+
     auto render = [&] (int blockSize) {
         auto gain = preparedAt (-6.0f);
         auto output = input;
-        for (int start = 0; start < static_cast<int> (output.size()); start += blockSize)
+        int start = 0;
+        while (start < total)
         {
-            if (start <= 2048 && 2048 < start + blockSize)
+            // Split the block that holds the change so the new target applies from sample 2048 on
+            int length = std::min (blockSize, total - start);
+            if (start < changeAt && changeAt < start + length)
+                length = changeAt - start;
+            if (start == changeAt)
                 gain.setTargetDb (12.0f);
-            const int length = std::min (blockSize, static_cast<int> (output.size()) - start);
+
             const std::array<std::span<float>, 1> channels { std::span<float> { output }.subspan (static_cast<size_t> (start)) };
             gain.process (channels, length);
+            start += length;
         }
         return output;
     };
 
-    // The target changes at the start of the block holding sample 2048, so blocks must
-    // align on 2048 for the comparison: 1, 64 and 512 do; 7 and 480 are checked separately.
-    const auto reference = render (1);
-    for (int blockSize : { 64, 512 })
+    const auto reference = render (total);
+    for (int blockSize : { 1, 7, 64, 480, 512 })
     {
+        INFO ("block size " << blockSize);
         const auto output = render (blockSize);
         for (size_t i = 0; i < output.size(); ++i)
             REQUIRE (output[i] == Catch::Approx (reference[i]).margin (1e-7));
     }
 
-    // Odd block sizes: a constant target (no change) must still give identical outputs.
-    auto renderConstant = [&] (int blockSize) {
-        auto gain = preparedAt (0.0f);
-        gain.setTargetDb (9.0f); // ramp in progress across block boundaries
-        auto output = input;
-        for (int start = 0; start < static_cast<int> (output.size()); start += blockSize)
-        {
-            const int length = std::min (blockSize, static_cast<int> (output.size()) - start);
-            const std::array<std::span<float>, 1> channels { std::span<float> { output }.subspan (static_cast<size_t> (start)) };
-            gain.process (channels, length);
-        }
-        return output;
-    };
-    const auto constantReference = renderConstant (4096);
-    for (int blockSize : { 1, 7, 480 })
-    {
-        const auto output = renderConstant (blockSize);
-        for (size_t i = 0; i < output.size(); ++i)
-            REQUIRE (output[i] == Catch::Approx (constantReference[i]).margin (1e-7));
-    }
+    // The change really happened: before it -6 dB, well after it +12 dB (10**(-6/20), 10**(12/20))
+    CHECK (reference[100] == Catch::Approx (input[100] * 0.5011872f).margin (1e-6));
+    CHECK (reference[4000] == Catch::Approx (input[4000] * 3.9810717f).margin (1e-5));
 }
-
 TEST_CASE ("SmoothedGain handles a block of 0 samples", "[dsp][gain]")
 {
     auto gain = preparedAt (0.0f);

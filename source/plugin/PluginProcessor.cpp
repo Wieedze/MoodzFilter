@@ -179,7 +179,7 @@ void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)
 void PluginProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     const auto xml = getXmlFromBinary (data, sizeInBytes);
-    if (xml == nullptr || ! xml->hasTagName (state.state.getType()))
+    if (xml == nullptr || !xml->hasTagName (state.state.getType()))
         return;
 
     // Version 1 is the only one so far; a missing attribute means version 1 too
