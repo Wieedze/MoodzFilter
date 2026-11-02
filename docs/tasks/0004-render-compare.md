@@ -57,7 +57,33 @@ Format of `tests/golden/manifest.json` (open question of the playbook): plugin A
 * [x] References in `tests/golden/` added by a separate `golden:` commit (4a54fcf).
 * [x] **Maxime listened to the references (CI artefact of run 41507926670) and approved them on 2026-11-02 at 20:23 in the session: gain louder on `gain-plus6`, unchanged on `unity`, automation quiet then loud with no click; impulses inaudible as expected.**
 * [x] CI runs `check`, `render`, `compare` on Linux and Windows, green (run 41507926670).
-* [ ] Builds with no new warning, `ctest` green, pluginval 10 green.
-* [ ] `task-verifier`: pass.
+* [x] Builds with no new warning, `ctest` green, pluginval 10 green.
+* [x] `task-verifier`: pass.
 
 ## End note (filled by the task-verifier)
+
+Task-verifier pass on 2026-11-02, after 2 rounds. Round 1 failed on five items, all fixed in `fbc518f`:
+1. the metric test tolerance was looser than the table;
+2. `Render case` and `Golden manifest` had no `GLOSSARY.md` entry;
+3. `CXX_EXTENSIONS OFF` was dropped from `MoodzFilterTools`;
+4. this file named `tools/RenderCases` instead of the real location;
+5. `check` printed `ok` after a `FAIL`.
+
+Commands and results, Debug build in `Builds` on `fbc518f` unless noted:
+* `cmake --build Builds`: 0 warnings, tools sources at `-std=c++23`.
+* `ctest --test-dir Builds --output-on-failure`: 22/22.
+* `./Builds/MoodzFilterTools check`: exit 0.
+* `render <dir>`: 12 WAV files (float, 2 ch, 48000 Hz, 32 bit), exit 0.
+* `compare <dir> tests/golden`: 12 × ok, exit 0.
+* Failure modes, on `d544ed9`:
+  * one sample +0.01: exit 1, names the file;
+  * render missing: exit 1;
+  * unlisted render: exit 1;
+  * no manifest: exit 2;
+  * unknown command: exit 2.
+* `clang-format --dry-run --Werror` on `tools/` and `tests/tools/`: clean.
+* `pluginval --strictness-level 10`: SUCCESS (`source/` unchanged).
+* Only `4a54fcf` (`golden:`) touches `tests/golden/`.
+* CI runs 41507926670 (`d544ed9`) and 41510268681 (`fbc518f`): Linux and Windows green, with the Tools check, Render and Compare steps.
+
+Post-mortem: playbook `docs/plugins/moodzfilter/learning/0004-render-compare.md`.
