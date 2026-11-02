@@ -1,7 +1,7 @@
 # 0008 — Audition build: filter model, cutoff and resonance in the plugin
 
 **Phase**: 2
-**Layer**: plugin, tools
+**Layer**: plugin, tools, dsp (no DSP behaviour change: candidate labels and count in `FilterCandidates.h`, `label` in `FilterSetup`, `MOODZ_NONBLOCKING` on the setters called from `processBlock` after the rt-safety review)
 **Depends on**: 0007
 
 ## Goal
@@ -15,8 +15,8 @@ Maxime chooses the 4 filter models by ear in Ableton Live, on his own music, ins
 | Parameter IDs | exactly `{ gainOut, filterModel, cutoff, resonance }` | exact | `.claude/rules/juce.md` |
 | `filterModel` | choice of the 7 candidates, in the order of `filterCandidates()`, default the first (Cytomic SVF) | exact | SPEC (Model 1 by default) |
 | `cutoff` | 20 Hz to 20 kHz, skewed so that the middle of the control is 632 Hz (√(20 × 20 000), a logarithmic feel), default 1 kHz; text `440 Hz`, `1.00 kHz` | exact range, ± 1 Hz centre | SPEC |
-| `resonance` | 0 to 100 %, default 20 %; maps to 0..1 for the filter | exact | SPEC |
-| New parameters | `juce::ParameterID` version 2 (`gainOut` stays at 1) | exact | `.claude/rules/juce.md` |
+| `resonance` | 0 to 100 %, default 20 %; the snapshot maps 0 / 20 / 100 % to 0 / 0.2 / 1 for the filter | ± 1e-6 | SPEC |
+| New parameters | `juce::ParameterID` version 2 (`gainOut` stays at 1), checked through `getVersionHint()` | exact | `.claude/rules/juce.md` |
 | `PluginProcessor`, Cytomic SVF, cutoff 1 kHz, resonance 0, sine 10 kHz then 100 Hz | steady-state gain −34 to −46 dB, then 0 ± 1 dB | as stated | task 0007 measurements (−42.8 dB) |
 | Model changed on every block, 2 s of noise | every sample finite; RTSan build: no report | exact | `.claude/rules/realtime-audio.md` |
 | State saved before this task (only `gainOut`) | loads; new parameters at their defaults | exact | `.claude/rules/juce.md` (fallback) |
@@ -36,7 +36,7 @@ Maxime chooses the 4 filter models by ear in Ableton Live, on his own music, ins
 
 ## Rules to load
 
-* `.claude/rules/juce.md`, `realtime-audio.md`, `testing.md`, `cpp.md`, `workflow.md`
+* `.claude/rules/juce.md`, `realtime-audio.md`, `dsp.md`, `testing.md`, `cpp.md`, `workflow.md`
 
 ## Definition of done
 

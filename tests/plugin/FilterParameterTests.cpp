@@ -1,3 +1,5 @@
+#include "dsp/FilterCandidates.h"
+#include "plugin/Parameters.h"
 #include "plugin/PluginProcessor.h"
 
 #include <catch2/catch_approx.hpp>
@@ -60,9 +62,11 @@ TEST_CASE ("Filter model parameter lists the candidates", "[plugin][filter]")
 {
     PluginProcessor processor;
     auto& model = parameter<juce::AudioParameterChoice> (processor, "filterModel");
-    REQUIRE (model.choices.size() == 7);
+    const auto candidates = moodz::dsp::filterCandidates();
+    REQUIRE (model.choices.size() == static_cast<int> (candidates.size()));
+    for (size_t i = 0; i < candidates.size(); ++i)
+        CHECK (model.choices[static_cast<int> (i)] == juce::String (candidates[i].label));
     CHECK (model.choices[0] == "Cytomic SVF");
-    CHECK (model.choices[3] == "OB-Xd 4-pole 24 dB");
     CHECK (model.getIndex() == 0);
 }
 
@@ -153,4 +157,55 @@ TEST_CASE ("The snapshot always gives a valid model index", "[plugin][filter]")
     CHECK (toModelIndex (-3.0f) == 0);
     CHECK (toModelIndex (std::numeric_limits<float>::quiet_NaN()) == 0);
     CHECK (toModelIndex (std::numeric_limits<float>::infinity()) == 0);
+}
+
+TEST_CASE ("Parameter versions follow the order of addition", "[plugin][parameters]")
+{
+    // .claude/rules/juce.md: gainOut shipped in version 1 (task 0003); the filter parameters
+    // were added in version 2 (task 0008). A version hint never changes once set.
+    PluginProcessor processor;
+    CHECK (parameter<juce::AudioParameterFloat> (processor, "gainOut").getVersionHint() == 1);
+    CHECK (parameter<juce::AudioParameterChoice> (processor, "filterModel").getVersionHint() == 2);
+    CHECK (parameter<juce::AudioParameterFloat> (processor, "cutoff").getVersionHint() == 2);
+    CHECK (parameter<juce::AudioParameterFloat> (processor, "resonance").getVersionHint() == 2);
+}
+
+namespace
+{
+    // The smallest processor that can own an APVTS built from createLayout(), to test the
+    // snapshot on its own
+    struct LayoutOnlyProcessor : juce::AudioProcessor
+    {
+        const juce::String getName() const override { return "layout"; }
+        void prepareToPlay (double, int) override {}
+        void releaseResources() override {}
+        void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override {}
+        double getTailLengthSeconds() const override { return 0.0; }
+        bool acceptsMidi() const override { return false; }
+        bool producesMidi() const override { return false; }
+        juce::AudioProcessorEditor* createEditor() override { return nullptr; }
+        bool hasEditor() const override { return false; }
+        int getNumPrograms() override { return 1; }
+        int getCurrentProgram() override { return 0; }
+        void setCurrentProgram (int) override {}
+        const juce::String getProgramName (int) override { return "Default"; }
+        void changeProgramName (int, const juce::String&) override {}
+        void getStateInformation (juce::MemoryBlock&) override {}
+        void setStateInformation (const void*, int) override {}
+    };
+}
+
+TEST_CASE ("The snapshot maps resonance from percent to 0..1", "[plugin][filter]")
+{
+    // SPEC: Resonance 0 to 100 %; the filter takes 0..1 (task 0008 Expected behaviour)
+    LayoutOnlyProcessor owner;
+    juce::AudioProcessorValueTreeState state { owner, nullptr, "MoodzFilter", moodz::parameters::createLayout() };
+    const moodz::parameters::Snapshotter snapshotter { state };
+    auto* resonance = state.getParameter ("resonance");
+
+    for (auto [percent, expected] : { std::pair { 0.0f, 0.0f }, std::pair { 20.0f, 0.2f }, std::pair { 100.0f, 1.0f } })
+    {
+        resonance->setValueNotifyingHost (resonance->convertTo0to1 (percent));
+        CHECK (snapshotter.snapshot().resonance == Catch::Approx (expected).margin (1e-6));
+    }
 }
