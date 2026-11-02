@@ -235,6 +235,7 @@ if (MOODZ_BUILD_TOOLS)
     # Same JUCE configuration as the plugin, like the test targets
     target_compile_definitions(MoodzFilterTools PRIVATE $<TARGET_PROPERTY:${PROJECT_NAME},COMPILE_DEFINITIONS>)
     target_link_libraries(MoodzFilterTools PRIVATE SharedCode moodz_tools_core juce::juce_audio_formats)
+    set_target_properties(MoodzFilterTools PROPERTIES CXX_EXTENSIONS OFF)
 endif ()
 
 # A separate target for Benchmarks (keeps the Tests target fast)

@@ -21,7 +21,7 @@
 | `check` | exit 0: every case × signal finite, and rendered with blocks of 1, 64 and 480 samples identical to the 512-sample render | ± 1e-7 | block size independence, `.claude/rules/dsp.md` |
 | CI (Linux, Windows) | `check`, `render`, `compare` steps green; renders uploaded as an artefact on Linux | — | — |
 
-## Render cases (in code, `tools/RenderCases`)
+## Render cases (in code, `renderCases()` in `tools/Rendering.cpp`)
 
 | Case | Gain out |
 | --- | --- |
@@ -51,12 +51,12 @@ Format of `tests/golden/manifest.json` (open question of the playbook): plugin A
 
 ## Definition of done
 
-* [ ] Signal and metric tests written first, seen red.
-* [ ] `render`, `compare`, `check` behave as in the table (commands and exit codes pasted in the end note).
-* [ ] Manifest format recorded in plugin ADR 0003.
-* [ ] References in `tests/golden/` added by a separate `golden: first references` commit.
-* [ ] **Maxime listened to the references (CI artefact) and approved them in the PR.**
-* [ ] CI runs `check`, `render`, `compare` on Linux and Windows, green.
+* [x] Signal and metric tests written first, seen red (ToolsTests against stubs: 5 of 5 failed).
+* [x] `render`, `compare`, `check` behave as in the table (commands and exit codes in PR #5).
+* [x] Manifest format recorded in plugin ADR 0003 (playbook `docs/plugins/moodzfilter/choices/0003-golden-manifest-format.md`).
+* [x] References in `tests/golden/` added by a separate `golden:` commit (4a54fcf).
+* [x] **Maxime listened to the references (CI artefact of run 41507926670) and approved them on 2026-11-02 at 20:23 in the session: gain louder on `gain-plus6`, unchanged on `unity`, automation quiet then loud with no click; impulses inaudible as expected.**
+* [x] CI runs `check`, `render`, `compare` on Linux and Windows, green (run 41507926670).
 * [ ] Builds with no new warning, `ctest` green, pluginval 10 green.
 * [ ] `task-verifier`: pass.
 

@@ -153,22 +153,24 @@ TEST_CASE ("Difference metrics", "[tools][compare]")
         CHECK (difference.rmsErrorDbfs <= silenceDbfs);
     }
 
+    // Silent reference so that the differences are exactly the float values 0.001f and 0.01f
+    // (float spacing near 0.1 is about 7.5e-9, which would hide a 1e-9 tolerance)
+    const std::vector<float> silence (1000, 0.0f);
+
     SECTION ("0.001 everywhere: max 0.001, RMS 20*log10(0.001) = -60 dBFS")
     {
-        auto shifted = reference;
-        for (auto& s : shifted)
-            s += 0.001f;
-        const auto difference = measureDifference (shifted, reference);
-        CHECK (difference.maxAbsError == Catch::Approx (0.001).margin (1e-7));
+        const std::vector<float> shifted (1000, 0.001f);
+        const auto difference = measureDifference (shifted, silence);
+        CHECK (difference.maxAbsError == Catch::Approx (0.001).margin (1e-9));
         CHECK (difference.rmsErrorDbfs == Catch::Approx (-60.0).margin (0.01));
     }
 
     SECTION ("one sample off by 0.01")
     {
-        auto changed = reference;
-        changed[500] += 0.01f;
-        const auto difference = measureDifference (changed, reference);
-        CHECK (difference.maxAbsError == Catch::Approx (0.01).margin (1e-7));
+        auto changed = silence;
+        changed[500] = 0.01f;
+        const auto difference = measureDifference (changed, silence);
+        CHECK (difference.maxAbsError == Catch::Approx (0.01).margin (1e-9));
         // RMS = sqrt(0.01^2 / 1000) -> 20*log10 = -40 - 30 = -70 dBFS
         CHECK (difference.rmsErrorDbfs == Catch::Approx (-70.0).margin (0.01));
     }

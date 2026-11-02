@@ -240,6 +240,7 @@ namespace moodz::tools
                     continue;
                 }
 
+                bool filePassed = true;
                 for (int blockSize : { 1, 64, 480 })
                 {
                     const auto output = renderThroughPlugin (renderCase, signal.samples, blockSize);
@@ -248,10 +249,13 @@ namespace moodz::tools
                     {
                         std::cout << "FAIL " << name << ": block size " << blockSize << " differs by "
                                   << difference.maxAbsError << " from block size " << referenceBlockSize << "\n";
-                        allPassed = false;
+                        filePassed = false;
                     }
                 }
-                std::cout << "ok   " << name << "\n";
+                if (filePassed)
+                    std::cout << "ok   " << name << "\n";
+                else
+                    allPassed = false;
             }
         }
 

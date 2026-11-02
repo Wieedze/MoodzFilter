@@ -19,6 +19,8 @@ Vocabulary shared between you, the agents and the code (Matt Pocock convention: 
 | **Smoothing** | Interpolating a parameter over time to avoid zipper noise |
 | **Oversampling** | Processing at a multiple of the sample rate to limit aliasing from non-linearities |
 | **Golden reference** | Reference WAV render in `tests/golden/`, compared on every PR |
+| **Golden manifest** | `tests/golden/manifest.json`: lists every golden reference with its tolerances (max absolute error, max RMS error in dBFS); a render or reference not listed fails `compare`. Format: plugin ADR 0003 |
+| **Render case** | A named parameter setup (and optional automation) that `MoodzFilterTools render` applies to every test signal; one render case × one test signal = one golden reference |
 | **Test signal** | Standardised input of a test: impulse, sine, sweep, pink noise, loop |
 | **Gate** | Condition to meet to move from one phase to the next |
 | **Layer** | One of `dsp` (signal processing, no JUCE), `plugin` (JUCE processor, parameters, state), `ui` (editor). Each lives in its own folder of `source/`; only `plugin` and `ui` see JUCE |
