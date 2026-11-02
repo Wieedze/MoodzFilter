@@ -17,7 +17,7 @@ include(JUCEDefaults)
 # This is the internal name of the project and the name of JUCE's shared code target
 # Note: This cannot have spaces (it may be 2024, but you can't have it all!)
 # Worry not, JUCE's PRODUCT_NAME can have spaces (and is what DAWs display)
-set(PROJECT_NAME "Pamplejuce")
+set(PROJECT_NAME "MoodzFilter")
 
 # Worry not, JUCE's PRODUCT_NAME can have spaces (and is what DAWs will display)
 # You can also just have it be the same thing as PROJECT_NAME
@@ -25,17 +25,17 @@ set(PROJECT_NAME "Pamplejuce")
 #   set(PROJECT_NAME "MyPlugin_v${MAJOR_VERSION}")
 # Doing so enables major versions to show up in IDEs and DAWs as separate plugins
 # allowing you to change parameters and behavior without breaking existing user projects
-set(PRODUCT_NAME "Pamplejuce Demo")
+set(PRODUCT_NAME "MoodzFilter")
 
 # Change me! Used for the MacOS bundle name and Installers
-set(COMPANY_NAME "Pamplejuce Company")
+set(COMPANY_NAME "Radikal Moodz")
 
 # Change me! Used for the MacOS bundle identifier (and signing)
-set(BUNDLE_ID "com.pamplejuce.pamplejuce")
+set(BUNDLE_ID "com.radikalmoodz.moodzfilter")
 
 # Change me! Set the plugin formats you want built
 # Valid choices: AAX Unity VST VST3 AU AUv3 Standalone
-set(FORMATS Standalone AU VST3 AUv3)
+set(FORMATS VST3)  # VST3 only: playbook ADR 0003
 
 # Force JUCE to work with sccache
 # instruct MSVC to embed debug info (/Z7) instead of emitting a .pdb
@@ -48,6 +48,9 @@ project(${PROJECT_NAME} VERSION ${CURRENT_VERSION})
 # Log build environment info (after project() so compiler info is available)
 include(PamplejuceLog)
 
+# ASan / TSan / RealtimeSanitizer options, must come after project()
+include(Sanitizers)
+
 # Defines the pamplejuce_* functions we call below (also fetches Catch2 at include time)
 include(PamplejuceFunctions)
 
@@ -56,9 +59,6 @@ include(PamplejuceFunctions)
 # and later `git submodule update --remote --merge` to keep it up to date
 # On Github Actions, this is done as a part of actions/checkout
 add_subdirectory(JUCE)
-
-# Add CLAP format
-add_subdirectory(modules/clap-juce-extensions EXCLUDE_FROM_ALL)
 
 # Add any other modules you want modules here, before the juce_add_plugin call
 # juce_add_module(modules/my_module)
@@ -81,13 +81,19 @@ juce_add_plugin("${PROJECT_NAME}"
     # Change me!
     # A four-character plugin id
     # First character MUST be uppercase for AU formats
-    PLUGIN_MANUFACTURER_CODE Pamp
+    PLUGIN_MANUFACTURER_CODE Rdkm
 
     # Change me!
     # A unique four-character plugin id
     # Note: this must have at least one upper-case character
-    PLUGIN_CODE P001
+    PLUGIN_CODE Mzf1
     FORMATS "${FORMATS}"
+
+    # An audio effect: stereo in, stereo out, no MIDI (plugin ADR 0002)
+    IS_SYNTH FALSE
+    NEEDS_MIDI_INPUT FALSE
+    NEEDS_MIDI_OUTPUT FALSE
+    IS_MIDI_EFFECT FALSE
 
     # The name of your final executable
     # This is how it's listed in the DAW
@@ -98,10 +104,6 @@ juce_add_plugin("${PROJECT_NAME}"
 # This lets us use our code in both the JUCE targets and our Test target
 # Without running into ODR violations
 add_library(SharedCode INTERFACE)
-
-clap_juce_extensions_plugin(TARGET "${PROJECT_NAME}"
-    CLAP_ID "${BUNDLE_ID}"
-    CLAP_FEATURES audio-effect)
 
 # Enable fast math, C++23 and a few other target defaults
 pamplejuce_shared_code_defaults()
@@ -130,15 +132,17 @@ target_compile_definitions(SharedCode
     JUCE_USE_CURL=0     # If you set this to 1, add `NEEDS_CURL TRUE` to the `juce_add_plugin` call
     JUCE_VST3_CAN_REPLACE_VST2=0
 
-    # Uncomment if you are paying for a an Indie/Pro license or releasing under GPLv3
-    # JUCE_DISPLAY_SPLASH_SCREEN=0
+    # JUCE 9 has no splash screen; licence is AGPLv3 (plugin ADR 0001)
 
     # lets the app known if we're Debug or Release
     CMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}"
+
+    # melatonin_inspector is a development aid, only linked in Debug
+    MOODZ_WITH_INSPECTOR=$<IF:$<CONFIG:Debug>,1,0>
     VERSION="${CURRENT_VERSION}"
 
     # JucePlugin_Name is for some reason doesn't use the nicer PRODUCT_NAME
-    PRODUCT_NAME_WITHOUT_VERSION="Pamplejuce"
+    PRODUCT_NAME_WITHOUT_VERSION="MoodzFilter"
 )
 
 # Link to any other modules you added (with juce_add_module) here!
@@ -149,7 +153,7 @@ target_compile_definitions(SharedCode
 target_link_libraries(SharedCode
     INTERFACE
     Assets
-    melatonin_inspector
+    $<$<CONFIG:Debug>:melatonin_inspector>
     juce_audio_utils
     juce_audio_processors
     juce_dsp
@@ -161,9 +165,6 @@ target_link_libraries(SharedCode
 
 # Link the JUCE plugin targets our SharedCode target
 target_link_libraries("${PROJECT_NAME}" PRIVATE SharedCode)
-
-# IPP support, comment out to disable
-include(PamplejuceIPP)
 
 # Everything related to the tests target
 pamplejuce_add_tests()
