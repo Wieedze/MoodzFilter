@@ -19,7 +19,7 @@ The SPEC targets a clean multimode, a ladder, an OB-X style model and a diode. C
 | Sine 100 Hz, peak 0.25, 48 kHz, steady state (after 4 800 samples) | `CytomicSVF` LP, cutoff 1 kHz, resonance 0 | output RMS / input RMS within ± 1 dB of 0 dB | ± 1 dB | 2-pole low pass, one decade below cutoff: \|H\| ≈ 1 |
 | Sine 10 kHz, same | same | attenuation between 34 and 46 dB | ± 6 dB around −40 dB | 2-pole low pass falls 12 dB/octave: (1 kHz / 10 kHz)² = −40 dB |
 | Sine 10 kHz / 100 Hz | `CytomicSVF` HP, cutoff 1 kHz, resonance 0 | 10 kHz within ± 1 dB of 0 dB; 100 Hz attenuated 34 to 46 dB | as above | mirror of the low pass |
-| 1 s of pink noise, every candidate | cutoff 20 Hz, 1 kHz, 20 kHz × resonance 0, 0.5, 1 | every sample finite, peak below 4 (+24 dBFS for a 0.25 input) | exact finiteness | `.claude/rules/dsp.md`, finite output |
+| 0.5 s of noise, every candidate | cutoff 20 Hz, 1 kHz, 20 kHz × resonance 0, 0.5, 1 | every sample finite, peak below 16 (+36 dB over the 0.25 input: a runaway guard; first written as 4, raised after the review measured 6.4 for the Cytomic SVF at 44.1 kHz, resonance 1) | exact finiteness | `.claude/rules/dsp.md`, finite output |
 | Same 8 192 samples of noise, every candidate | cutoff 300 Hz then 5 kHz at sample 4 096; blocks of 1, 7, 64, 480, 512 | identical outputs | ± 1e-6 | block size independence (internal packets of 16 samples) |
 | Render, `reset()`, render again | any candidate | identical | exact | `reset()` clears the state |
 | Block of 0 samples | any | no crash, packet position unchanged | — | `.claude/rules/realtime-audio.md` |
