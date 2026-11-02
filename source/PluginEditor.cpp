@@ -5,6 +5,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
 {
     juce::ignoreUnused (processorRef);
 
+#if MOODZ_WITH_INSPECTOR
     addAndMakeVisible (inspectButton);
 
     // this chunk of code instantiates and opens the melatonin inspector
@@ -17,6 +18,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
 
         inspector->setVisible (true);
     };
+#endif
 
     // Make sure that before the constructor has finished, you've set the
     // editor's size to whatever you need it to be.
@@ -42,7 +44,7 @@ void PluginEditor::paint (juce::Graphics& g)
 void PluginEditor::resized()
 {
     // layout the positions of your child components here
-    auto area = getLocalBounds();
-    area.removeFromBottom(50);
-    inspectButton.setBounds (getLocalBounds().withSizeKeepingCentre(100, 50));
+#if MOODZ_WITH_INSPECTOR
+    inspectButton.setBounds (getLocalBounds().withSizeKeepingCentre (100, 50));
+#endif
 }
