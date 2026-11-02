@@ -1,4 +1,4 @@
-#include "PluginEditor.h"
+#include "ui/PluginEditor.h"
 
 PluginEditor::PluginEditor (PluginProcessor& p)
     : AudioProcessorEditor (&p), processorRef (p)
@@ -27,6 +27,12 @@ PluginEditor::PluginEditor (PluginProcessor& p)
 
 PluginEditor::~PluginEditor()
 {
+}
+
+// Defined here so that plugin/ does not include ui/
+juce::AudioProcessorEditor* PluginProcessor::createEditor()
+{
+    return new PluginEditor (*this);
 }
 
 void PluginEditor::paint (juce::Graphics& g)
