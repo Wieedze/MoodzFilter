@@ -21,7 +21,7 @@ Gain out follows the amended SPEC (playbook MoodzFilter ADR 0004): from silence 
 | `gainOut` text | value −60 dB / 0 dB / +6 dB | `-inf` / `0.0 dB` / `+6.0 dB` | exact strings | ADR 0004 |
 | `gainOut` text to value | `-inf` | −60 dB | ± 1e-6 | — |
 | Editor | `createEditor()` | a `juce::GenericAudioProcessorEditor` | — | SPEC interface |
-| `MoodzFilterTools snapshot <png>` | — | exit 0, PNG written, width and height > 0 | — | `.claude/rules/ui.md` |
+| `MoodzFilterTools snapshot <png>` | — | exit 0, PNG written, width and height > 0; run in CI and attached to the renders artefact | — | `.claude/rules/ui.md` |
 | Render cases | `gain-automation` −12 dB then +6 dB; new `gain-mute` 0 dB then silence | new references through a `golden:` commit, approved by listening | manifest tolerances | ADR 0003, ADR 0004 |
 
 ## Out of scope
