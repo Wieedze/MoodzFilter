@@ -21,6 +21,8 @@ Vocabulary shared between you, the agents and the code (Matt Pocock convention: 
 | **Golden reference** | Reference WAV render in `tests/golden/`, compared on every PR |
 | **Canary** | A test program that deliberately breaks a rule (for example `RtsanCanary`, which allocates in a nonblocking function) to prove that a checker such as RealtimeSanitizer really fires; its test passes only if the checker reports the violation |
 | **Golden manifest** | `tests/golden/manifest.json`: lists every golden reference with its tolerances (max absolute error, max RMS error in dBFS); a render or reference not listed fails `compare`. Format: plugin ADR 0003 |
+| **Generic editor** | `juce::GenericAudioProcessorEditor`: the editor JUCE draws by itself, one control per parameter. The v1 interface (SPEC) |
+| **Silence floor** | Lowest value of a gain control, −60 dB internally: displayed `-inf`, gives a gain of exactly 0 (ADR 0004) |
 | **Render case** | A named parameter setup (and optional automation) that `MoodzFilterTools render` applies to every test signal; one render case × one test signal = one golden reference |
 | **Test signal** | Standardised input of a test: impulse, sine, sweep, pink noise, loop |
 | **Gate** | Condition to meet to move from one phase to the next |

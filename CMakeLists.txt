@@ -170,8 +170,6 @@ target_compile_definitions(SharedCode
     # lets the app known if we're Debug or Release
     CMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}"
 
-    # melatonin_inspector is a development aid, only linked in Debug
-    MOODZ_WITH_INSPECTOR=$<IF:$<CONFIG:Debug>,1,0>
     VERSION="${CURRENT_VERSION}"
 
     # JucePlugin_Name is for some reason doesn't use the nicer PRODUCT_NAME

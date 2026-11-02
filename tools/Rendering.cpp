@@ -1,5 +1,6 @@
 #include "Rendering.h"
 
+#include "dsp/SmoothedGain.h"
 #include "plugin/Parameters.h"
 #include "plugin/PluginProcessor.h"
 
@@ -25,7 +26,9 @@ namespace moodz::tools
         return {
             { "unity", 0.0f, 0.0f, false },
             { "gain-plus6", 6.0f, 6.0f, false },
-            { "gain-automation", -12.0f, 12.0f, true },
+            { "gain-automation", -12.0f, 6.0f, true },
+            // ADR 0004: fade to silence (the -inf floor) from the middle
+            { "gain-mute", 0.0f, dsp::SmoothedGain::silenceFloorDb, true },
         };
     }
 

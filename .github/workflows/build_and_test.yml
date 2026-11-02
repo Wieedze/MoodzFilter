@@ -95,13 +95,18 @@ jobs:
       - name: Compare with the golden references
         run: ./${{ env.BUILD_DIR }}/MoodzFilterTools compare ${{ env.BUILD_DIR }}/renders tests/golden
 
-      # The renders, to listen to them before approving a golden change
+      - name: Snapshot of the editor
+        run: ./${{ env.BUILD_DIR }}/MoodzFilterTools snapshot ${{ env.BUILD_DIR }}/renders/editor.png
+
+      # The renders and the editor snapshot, to review them before approving a change
       - name: Upload renders
         if: ${{ always() && runner.os == 'Linux' }}
         uses: actions/upload-artifact@v7
         with:
           name: renders-${{ github.sha }}
-          path: ${{ env.BUILD_DIR }}/renders/*.wav
+          path: |
+            ${{ env.BUILD_DIR }}/renders/*.wav
+            ${{ env.BUILD_DIR }}/renders/editor.png
           if-no-files-found: ignore
 
       - name: Read in .env from CMake # see GitHubENV.cmake

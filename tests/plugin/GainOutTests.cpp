@@ -42,12 +42,36 @@ TEST_CASE ("Parameter IDs are frozen", "[plugin][parameters]")
 
 TEST_CASE ("Gain out matches the SPEC", "[plugin][parameters]")
 {
+    // SPEC v1 amended by ADR 0004: silence (-inf) to +6 dB, default 0 dB
     PluginProcessor processor;
     auto& gainOut = floatParameter (processor, "gainOut");
 
-    CHECK (gainOut.range.start == Catch::Approx (-24.0f));
-    CHECK (gainOut.range.end == Catch::Approx (24.0f));
+    CHECK (gainOut.range.start == Catch::Approx (-60.0f));
+    CHECK (gainOut.range.end == Catch::Approx (6.0f));
     CHECK (gainOut.get() == Catch::Approx (0.0f).margin (1e-6));
+}
+
+TEST_CASE ("Gain out shows -inf at the silence floor", "[plugin][parameters]")
+{
+    PluginProcessor processor;
+    auto& gainOut = floatParameter (processor, "gainOut");
+    // getText and getValueForText are public on the base class only
+    auto& asParameter = static_cast<juce::AudioProcessorParameter&> (gainOut);
+    auto textAt = [&] (float db) { return asParameter.getText (gainOut.convertTo0to1 (db), 32); };
+
+    CHECK (textAt (-60.0f) == "-inf");
+    CHECK (textAt (0.0f) == "0.0 dB");
+    CHECK (textAt (6.0f) == "+6.0 dB");
+    CHECK (textAt (-12.5f) == "-12.5 dB");
+    CHECK (gainOut.convertFrom0to1 (asParameter.getValueForText ("-inf")) == Catch::Approx (-60.0f).margin (1e-6));
+}
+
+TEST_CASE ("The editor is the JUCE generic editor", "[plugin][ui]")
+{
+    // SPEC: generic JUCE editor, one control per parameter
+    PluginProcessor processor;
+    std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditor());
+    CHECK (dynamic_cast<juce::GenericAudioProcessorEditor*> (editor.get()) != nullptr);
 }
 
 TEST_CASE ("Gain out is applied to both channels", "[plugin][gain]")
