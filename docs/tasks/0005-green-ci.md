@@ -12,7 +12,7 @@ CI proves on every PR that nothing on the audio path allocates, locks or makes a
 
 | Check | Expected result |
 | --- | --- |
-| `RtsanCanary` (built only with `-DWITH_REALTIME_SANITIZER=ON`): allocates inside a `nonblocking` function | RealtimeSanitizer stops it with a non-zero exit; ctest test `rtsan-canary` is declared `WILL_FAIL` and therefore passes. Seen failing (red) while `MOODZ_REALTIME_SANITIZER` was not yet defined, so the attribute was empty |
+| `RtsanCanary` (built only with `-DWITH_REALTIME_SANITIZER=ON`): allocates inside a `nonblocking` function | RealtimeSanitizer stops it; ctest test `rtsan-canary` passes only if the output contains `RealtimeSanitizer: unsafe-library-call` (`PASS_REGULAR_EXPRESSION`). Seen failing (red) while `MOODZ_REALTIME_SANITIZER` was not yet defined, so the attribute was empty |
 | RTSan build, `ctest` | all tests pass: `PluginTests` and `DspTests` call `processBlock` and `SmoothedGain::process` under the sanitizer with no report |
 | RTSan build, `MoodzFilterTools check` | exit 0, no report (every render case through the real `processBlock`, blocks of 1 to 512 samples) |
 | Normal builds (clang 18 here, clang-cl on Windows) | `MOODZ_NONBLOCKING` expands to nothing; 0 warnings |

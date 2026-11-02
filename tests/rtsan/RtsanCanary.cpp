@@ -1,6 +1,6 @@
 // Proves that the RealtimeSanitizer build really catches a real-time violation: this
 // program allocates inside a function marked nonblocking and must be stopped by RTSan.
-// ctest declares it WILL_FAIL, so the test passes only when the sanitizer fires.
+// ctest matches the sanitizer report, so the test passes only when RTSan fires.
 #include "dsp/Realtime.h"
 
 #include <cstdlib>

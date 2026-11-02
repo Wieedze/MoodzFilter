@@ -228,12 +228,13 @@ target_link_libraries(ToolsTests PRIVATE moodz_tools_core Catch2::Catch2WithMain
 set_target_properties(ToolsTests PROPERTIES CXX_EXTENSIONS OFF)
 catch_discover_tests(ToolsTests DISCOVERY_MODE PRE_TEST)
 
-# RealtimeSanitizer canary: must be stopped by RTSan, so ctest expects it to fail
+# RealtimeSanitizer canary: passes only when RTSan reports the allocation (matching its
+# message, not just any crash or loader error)
 if (WITH_REALTIME_SANITIZER)
     add_executable(RtsanCanary "${CMAKE_CURRENT_SOURCE_DIR}/tests/rtsan/RtsanCanary.cpp")
     target_link_libraries(RtsanCanary PRIVATE dsp)
     add_test(NAME rtsan-canary COMMAND RtsanCanary)
-    set_tests_properties(rtsan-canary PROPERTIES WILL_FAIL TRUE)
+    set_tests_properties(rtsan-canary PROPERTIES PASS_REGULAR_EXPRESSION "RealtimeSanitizer: unsafe-library-call")
 endif ()
 
 # MoodzFilterTools: headless render, check, compare and bench through the real

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "dsp/Realtime.h"
 #include "dsp/SmoothedGain.h"
 #include "plugin/Parameters.h"
 
