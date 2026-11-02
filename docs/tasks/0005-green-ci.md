@@ -39,6 +39,18 @@ CI proves on every PR that nothing on the audio path allocates, locks or makes a
 * [x] Normal Debug and Release builds: 0 warnings, `ctest` green, pluginval 10 green.
 * [x] `rt-safety-reviewer` passed (no blocking finding; canary regex and direct include applied in fa21551; two notes in FUTURE.md).
 * [x] CI green on the three jobs (run 41517663478 on fa21551: Linux, Linux RealtimeSanitizer, Windows).
-* [ ] `task-verifier`: pass.
+* [x] `task-verifier`: pass.
 
 ## End note (filled by the task-verifier)
+
+Task-verifier pass on 2026-11-02, after 2 rounds. Round 1 failed on one item: the new term `Canary` (`RtsanCanary`, `rtsan-canary`) had no `GLOSSARY.md` entry. It was fixed in `528ad1f`, which also states `noexcept` on `processBlock` in the Goal. Checks re-run by the verifier:
+* Debug clean rebuild: 0 warnings, ctest 22/22. Tools check, render and compare: exit 0.
+* Release: 0 warnings, ctest 22/22.
+* pluginval 10: SUCCESS on Debug and Release.
+* RTSan build (clang 20): ctest 23/23 including `rtsan-canary`. Tools check: exit 0.
+* Canary: red without `MOODZ_REALTIME_SANITIZER`, green with it.
+* An allocation injected into `processBlock` in a scratch copy was caught by RTSan in PluginTests.
+* No `-std=gnu` anywhere.
+* No new clang-format violation, and `tests/golden/` is unchanged.
+
+CI run 41517663478 on `fa21551` passed on all three jobs. Post-mortem: playbook `docs/plugins/moodzfilter/learning/0005-green-ci.md`.
