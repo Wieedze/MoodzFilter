@@ -22,6 +22,10 @@ namespace moodz::dsp
     // output does not depend on how the host splits its blocks (.claude/rules/dsp.md).
     // Cutoff and resonance are read at the start of each packet; sst-filters interpolates its
     // coefficients across the packet.
+    //
+    // Precondition: the caller flushes denormals (FTZ/DAZ), as processBlock does with
+    // juce::ScopedNoDenormals. sst-filters does not, and without it a decaying ladder can cost
+    // tens of times more CPU (rt-safety review of task 0007).
     class MultimodeFilter
     {
     public:
@@ -36,12 +40,14 @@ namespace moodz::dsp
         void prepare (double sampleRate, int maxBlockSize);
         void reset() noexcept;
 
-        // Clamped to [minCutoffHz, min (maxCutoffHz, 0.45 * sampleRate)]; non-finite ignored.
+        // Clamped to [minCutoffHz, maxCutoffHz]; non-finite ignored. In process, the cutoff is
+        // also kept under 0.45 * sample rate, so it stays valid when prepare changes the rate.
         void setCutoffHz (float hz) noexcept;
         // Clamped to [0, 1]; non-finite ignored.
         void setResonance (float amount) noexcept;
 
-        // One or two channels; with one channel, the filter runs mono.
+        // One or two channels; with one channel, the filter runs mono. Processes at most as many
+        // samples as the shortest channel span holds.
         void process (std::span<const std::span<float>> channels, int numSamples) noexcept MOODZ_NONBLOCKING;
 
     private:
@@ -49,6 +55,7 @@ namespace moodz::dsp
         FilterSetup setup;
         double sampleRate = 48000.0;
         float cutoffHz = 1000.0f;
+        float nyquistGuardHz = 21600.0f; // 0.45 * sampleRate
         float resonance = 0.0f;
         int packetPosition = 0;
         bool ready = false;

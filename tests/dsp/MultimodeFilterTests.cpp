@@ -110,28 +110,59 @@ TEST_CASE ("Every filter candidate is a valid configuration", "[dsp][filter]")
 
 TEST_CASE ("Every filter candidate stays finite at the bounds", "[dsp][filter]")
 {
-    const auto input = noise (48000, 7u);
-    for (const auto& candidate : filterCandidates())
+    // .claude/rules/dsp.md: finite output. Peak bound 16 (+36 dB over the 0.25 input) only
+    // catches a runaway: near self-oscillation the level legitimately rises (6.4 measured for
+    // the Cytomic SVF at 44.1 kHz, resonance 1).
+    for (double rate : { 44100.0, 48000.0, 96000.0, 192000.0 })
     {
-        for (float cutoff : { 20.0f, 1000.0f, 20000.0f })
+        const auto input = noise (static_cast<int> (rate / 2), 7u);
+        for (const auto& candidate : filterCandidates())
         {
-            for (float resonance : { 0.0f, 0.5f, 1.0f })
+            for (float cutoff : { 20.0f, 1000.0f, 20000.0f })
             {
-                INFO (candidate.name << " cutoff " << cutoff << " resonance " << resonance);
-                auto filter = preparedFilter (candidate, cutoff, resonance);
-                auto output = input;
-                processMono (filter, output);
-                float peak = 0.0f;
-                bool finite = true;
-                for (auto s : output)
+                for (float resonance : { 0.0f, 0.5f, 1.0f })
                 {
-                    finite = finite && std::isfinite (s);
-                    peak = std::max (peak, std::abs (s));
+                    INFO (candidate.name << " at " << rate << " Hz, cutoff " << cutoff << ", resonance " << resonance);
+                    MultimodeFilter filter;
+                    REQUIRE (filter.configure (candidate));
+                    filter.prepare (rate, 512);
+                    filter.setCutoffHz (cutoff);
+                    filter.setResonance (resonance);
+                    auto output = input;
+                    processMono (filter, output);
+                    float peak = 0.0f;
+                    bool finite = true;
+                    for (auto s : output)
+                    {
+                        finite = finite && std::isfinite (s);
+                        peak = std::max (peak, std::abs (s));
+                    }
+                    REQUIRE (finite);
+                    CHECK (peak < 16.0f);
                 }
-                REQUIRE (finite);
-                CHECK (peak < 4.0f);
             }
         }
+    }
+}
+
+TEST_CASE ("MultimodeFilter stays finite when the sample rate drops", "[dsp][filter]")
+{
+    // rt-safety review of task 0007: a cutoff set at 48 kHz must not exceed Nyquist after
+    // prepare() at a lower rate (OB-Xd models computed tan(pi * f / sr) past pi / 2)
+    const auto input = noise (32000, 13u);
+    for (const auto& candidate : filterCandidates())
+    {
+        INFO (candidate.name);
+        MultimodeFilter filter;
+        REQUIRE (filter.configure (candidate));
+        filter.prepare (48000.0, 512);
+        filter.setCutoffHz (20000.0f);
+        filter.setResonance (1.0f);
+        filter.prepare (32000.0, 512);
+        auto output = input;
+        processMono (filter, output);
+        for (auto s : output)
+            REQUIRE (std::isfinite (s));
     }
 }
 
@@ -187,6 +218,37 @@ TEST_CASE ("MultimodeFilter reset clears the state", "[dsp][filter]")
         processMono (filter, second);
         REQUIRE (first == second);
     }
+}
+
+TEST_CASE ("MultimodeFilter reset in the middle of a packet clears the state", "[dsp][filter]")
+{
+    const auto input = noise (4096, 17u);
+    for (const auto& candidate : filterCandidates())
+    {
+        INFO (candidate.name);
+        auto used = preparedFilter (candidate, 800.0f, 0.6f);
+        std::vector<float> partial (7, 0.1f); // 7 samples: stops inside a 16-sample packet
+        processMono (used, partial);
+        used.reset();
+        auto fresh = preparedFilter (candidate, 800.0f, 0.6f);
+
+        auto a = input;
+        auto b = input;
+        processMono (used, a);
+        processMono (fresh, b);
+        REQUIRE (a == b);
+    }
+}
+
+TEST_CASE ("MultimodeFilter never reads past its channel spans", "[dsp][filter]")
+{
+    // numSamples larger than the spans: only the samples the spans hold are processed
+    auto filter = preparedFilter (cytomicLowPass, 1000.0f, 0.0f);
+    std::vector<float> storage (64, 0.25f);
+    const std::array<std::span<float>, 1> channels { std::span<float> { storage }.first (32) };
+    filter.process (channels, 64);
+    for (size_t i = 32; i < storage.size(); ++i)
+        REQUIRE (storage[i] == 0.25f);
 }
 
 TEST_CASE ("MultimodeFilter handles a block of 0 samples", "[dsp][filter]")
