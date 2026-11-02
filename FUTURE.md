@@ -6,3 +6,5 @@ Requested or imagined, deliberately not built now. One line of context each. The
 | --- | --- | --- |
 | macOS build and AU format | Removed in task 0001 (v1 is Windows VST3 only). Bring back with signing and notarisation | 2026-11-02 |
 | Sample-accurate parameter automation | Task 0003: parameters are read once per block and each change restarts a 20 ms ramp, so under continuous automation the gain curve depends on the host block size. Linked to the playbook open question on TetraDrive's sample-accurate automation patch | 2026-11-02 |
+| Annotate `Snapshotter::snapshot` and `SmoothedGain::setTargetDb` with `MOODZ_NONBLOCKING` | Task 0005 rt-safety review: already covered at run time through `processBlock`; the annotation would document intent for direct callers | 2026-11-02 |
+| Bound the template clear loop in `processBlock` by `buffer.getNumChannels()` | Task 0005 rt-safety review: in Release nothing stops an out-of-bounds write if a host passes fewer channels than `getTotalNumOutputChannels()`; JUCE wrappers normally do pass enough | 2026-11-02 |

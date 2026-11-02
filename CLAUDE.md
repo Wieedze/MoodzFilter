@@ -86,6 +86,17 @@ Linux build dependencies: `libasound2-dev libx11-dev libxi-dev libxext-dev libxr
 
 Sanitizers: `-DWITH_REALTIME_SANITIZER=ON` (clang ≥ 20, Linux), `-DWITH_ADDRESS_SANITIZER=ON`, `-DWITH_THREAD_SANITIZER=ON`.
 
+RealtimeSanitizer build, as in the CI job (executables only: the VST3 cannot link the sanitizer runtime):
+
+```bash
+cmake -B Builds-rtsan -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20 -DWITH_REALTIME_SANITIZER=ON
+cmake --build Builds-rtsan --target DspTests PluginTests ToolsTests MoodzFilterTools RtsanCanary Benchmarks
+ctest --test-dir Builds-rtsan --output-on-failure    # rtsan-canary passes only if the sanitizer fires
+./Builds-rtsan/MoodzFilterTools check
+```
+
+Audio-thread functions carry `MOODZ_NONBLOCKING` (`source/dsp/Realtime.h`): `[[clang::nonblocking]]` in that build, nothing elsewhere.
+
 ## Repo map
 
 ```

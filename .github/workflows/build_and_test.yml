@@ -173,10 +173,44 @@ jobs:
           name: ${{ env.ARTIFACT_NAME }}.zip
           path: "${{ env.ARTIFACTS_PATH }}/${{ env.ARTIFACT_NAME }}.zip"
 
+  # RealtimeSanitizer: the tests and the tools drive processBlock and the dsp process functions,
+  # marked [[clang::nonblocking]] in this build; any allocation, lock or blocking call there stops
+  # the run. Executables only: clang links the sanitizer runtime into executables, not into the VST3.
+  rtsan:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
+    name: Linux RealtimeSanitizer
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Install clang 20 and JUCE's Linux deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-20 libclang-rt-20-dev ninja-build libasound2-dev libx11-dev libxi-dev libxinerama-dev libxext-dev libxrandr-dev libxcursor-dev libxcomposite-dev libfreetype-dev libfontconfig1-dev libgl1-mesa-dev libglu1-mesa-dev xvfb
+          sudo /usr/bin/Xvfb $DISPLAY &
+
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Cache the build
+        uses: mozilla-actions/sccache-action@v0.0.11
+
+      - name: Configure
+        run: cmake -B Builds-rtsan -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20 -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DWITH_REALTIME_SANITIZER=ON -DMOODZ_BUILD_TOOLS=ON .
+
+      - name: Build the test and tool executables
+        run: cmake --build Builds-rtsan --target DspTests PluginTests ToolsTests MoodzFilterTools RtsanCanary Benchmarks
+
+      - name: Tests under RealtimeSanitizer (rtsan-canary must be stopped by the sanitizer)
+        run: ctest --test-dir Builds-rtsan --output-on-failure
+
+      - name: Tools check under RealtimeSanitizer
+        run: ./Builds-rtsan/MoodzFilterTools check
+
   release:
     if: contains(github.ref, 'tags/v')
     runs-on: ubuntu-latest
-    needs: build_and_test
+    needs: [build_and_test, rtsan]
 
     steps:
       - name: Get Artifacts

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "dsp/Realtime.h"
 #include "dsp/SmoothedGain.h"
 #include "plugin/Parameters.h"
 
@@ -16,7 +17,8 @@ public:
 
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
 
-    void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    // Audio thread: checked by RealtimeSanitizer in the RTSan build
+    void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) noexcept MOODZ_NONBLOCKING override;
 
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override;
