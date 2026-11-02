@@ -10,6 +10,8 @@ namespace moodz::dsp
         // Decibels to linear amplitude: g = 10^(dB / 20) (definition of the decibel for amplitudes)
         float decibelsToGain (float gainDb) noexcept
         {
+            if (gainDb <= SmoothedGain::silenceFloorDb)
+                return 0.0f;
             return std::pow (10.0f, gainDb / 20.0f);
         }
     }
@@ -26,6 +28,7 @@ namespace moodz::dsp
     void SmoothedGain::reset() noexcept
     {
         currentGain = targetGain;
+        rampStartGain = targetGain;
         step = 0.0f;
         samplesLeft = 0;
     }
@@ -36,13 +39,14 @@ namespace moodz::dsp
             return;
 
         // Called every block: recompute the linear gain only when the target really changes
-        const float clampedDb = std::clamp (gainDb, minDb, maxDb);
+        const float clampedDb = std::clamp (gainDb, silenceFloorDb, maxDb);
         if (clampedDb == targetDb)
             return;
 
         // A new target restarts a full-length ramp from wherever the gain is now
         targetDb = clampedDb;
         targetGain = decibelsToGain (clampedDb);
+        rampStartGain = currentGain;
         samplesLeft = rampLengthSamples;
         step = (targetGain - currentGain) / static_cast<float> (rampLengthSamples);
     }
@@ -54,8 +58,10 @@ namespace moodz::dsp
             if (samplesLeft > 0)
             {
                 --samplesLeft;
-                // Land exactly on the target at the end of the ramp, so no rounding drift remains
-                currentGain = samplesLeft == 0 ? targetGain : currentGain + step;
+                // Computed from the start of the ramp rather than accumulated, so float rounding
+                // does not drift; the last sample lands exactly on the target
+                const auto stepsDone = static_cast<float> (rampLengthSamples - samplesLeft);
+                currentGain = samplesLeft == 0 ? targetGain : rampStartGain + step * stepsDone;
             }
 
             const auto index = static_cast<size_t> (i);

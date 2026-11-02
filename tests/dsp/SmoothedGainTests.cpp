@@ -19,7 +19,7 @@ namespace
 
     // Expected values computed outside the implementation (Python 3, 10**(dB/20)):
     constexpr float gainPlus6Db = 1.9952623f; // 10**(6/20)
-    constexpr float gainPlus24Db = 15.848932f; // 10**(24/20)
+    constexpr float gainMinus59_9Db = 0.0010115794f; // 10**(-59.9/20)
     constexpr float gainMinus24Db = 0.0630957f; // 10**(-24/20)
     constexpr int rampSamples = 960; // 48000 * 0.02
 
@@ -101,20 +101,50 @@ TEST_CASE ("SmoothedGain ramps linearly over 20 ms", "[dsp][gain]")
 
 TEST_CASE ("SmoothedGain clamps the target to the SPEC range", "[dsp][gain]")
 {
-    SECTION ("+60 dB is clamped to +24 dB")
+    // ADR 0004: Gain out tops at +6 dB
+    auto gain = preparedAt (60.0f);
+    std::vector<float> dc (16, 1.0f);
+    processMono (gain, dc);
+    CHECK (dc.back() == Catch::Approx (gainPlus6Db).margin (1e-5));
+}
+
+TEST_CASE ("SmoothedGain reaches silence at the floor", "[dsp][gain]")
+{
+    // ADR 0004: at the silence floor (-60 dB) and below, the gain is exactly 0
+    for (float floorOrBelow : { SmoothedGain::silenceFloorDb, -100.0f })
     {
-        auto gain = preparedAt (60.0f);
-        std::vector<float> dc (16, 1.0f);
+        auto gain = preparedAt (floorOrBelow);
+        std::vector<float> dc (64, 1.0f);
         processMono (gain, dc);
-        CHECK (dc.back() == Catch::Approx (gainPlus24Db).margin (1e-4));
+        for (auto s : dc)
+            REQUIRE (s == 0.0f);
     }
 
-    SECTION ("-60 dB is clamped to -24 dB")
+    SECTION ("just above the floor is not silence: 10^(-59.9/20) = 0.00101158")
     {
-        auto gain = preparedAt (-60.0f);
+        auto gain = preparedAt (-59.9f);
         std::vector<float> dc (16, 1.0f);
         processMono (gain, dc);
-        CHECK (dc.back() == Catch::Approx (gainMinus24Db).margin (1e-6));
+        CHECK (dc.back() == Catch::Approx (gainMinus59_9Db).margin (1e-7));
+    }
+
+    SECTION ("fading to the floor ramps over 960 samples and ends exactly at 0")
+    {
+        auto gain = preparedAt (0.0f);
+        gain.setTargetDb (SmoothedGain::silenceFloorDb);
+        std::vector<float> dc (2000, 1.0f);
+        processMono (gain, dc);
+
+        constexpr float maxStep = 1.0f / rampSamples;
+        float previous = 1.0f;
+        for (auto s : dc)
+        {
+            REQUIRE (std::abs (s - previous) <= maxStep + 1e-6f);
+            previous = s;
+        }
+        CHECK (dc[rampSamples / 2] > 0.0f);
+        for (size_t i = rampSamples - 1; i < dc.size(); ++i)
+            REQUIRE (dc[i] == 0.0f);
     }
 }
 
@@ -137,7 +167,7 @@ TEST_CASE ("SmoothedGain ignores a non-finite target", "[dsp][gain]")
 TEST_CASE ("SmoothedGain does not depend on the block size", "[dsp][gain]")
 {
     // Deterministic noise (32-bit LCG, Numerical Recipes constants); the target goes from
-    // -6 dB to +12 dB exactly at sample 2048, whatever the block size.
+    // -6 dB to +6 dB exactly at sample 2048, whatever the block size.
     std::vector<float> input (4096);
     std::uint32_t state = 12345u;
     for (auto& s : input)
@@ -160,7 +190,7 @@ TEST_CASE ("SmoothedGain does not depend on the block size", "[dsp][gain]")
             if (start < changeAt && changeAt < start + length)
                 length = changeAt - start;
             if (start == changeAt)
-                gain.setTargetDb (12.0f);
+                gain.setTargetDb (6.0f);
 
             const std::array<std::span<float>, 1> channels { std::span<float> { output }.subspan (static_cast<size_t> (start)) };
             gain.process (channels, length);
@@ -178,9 +208,9 @@ TEST_CASE ("SmoothedGain does not depend on the block size", "[dsp][gain]")
             REQUIRE (output[i] == Catch::Approx (reference[i]).margin (1e-7));
     }
 
-    // The change really happened: before it -6 dB, well after it +12 dB (10**(-6/20), 10**(12/20))
+    // The change really happened: before it -6 dB, well after it +6 dB (10**(-6/20), 10**(6/20))
     CHECK (reference[100] == Catch::Approx (input[100] * 0.5011872f).margin (1e-6));
-    CHECK (reference[4000] == Catch::Approx (input[4000] * 3.9810717f).margin (1e-5));
+    CHECK (reference[4000] == Catch::Approx (input[4000] * gainPlus6Db).margin (1e-5));
 }
 TEST_CASE ("SmoothedGain handles a block of 0 samples", "[dsp][gain]")
 {

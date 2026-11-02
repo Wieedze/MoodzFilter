@@ -17,6 +17,10 @@ namespace moodz::parameters
 
     juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
 
+    // Display of gain values: "-inf" at the silence floor, otherwise "+6.0 dB", "-12.5 dB"
+    juce::String decibelsToText (float db);
+    float textToDecibels (const juce::String& text);
+
     static_assert (std::atomic<float>::is_always_lock_free, "the audio thread reads parameters through std::atomic<float>");
 
     // Plain copy of the parameter values, taken at the start of each block.

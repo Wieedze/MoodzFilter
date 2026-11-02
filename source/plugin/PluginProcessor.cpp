@@ -163,7 +163,7 @@ bool PluginProcessor::hasEditor() const
     return true; // (change this to false if you choose to not supply an editor)
 }
 
-// createEditor() is defined in ui/PluginEditor.cpp: the plugin layer does not know the editor
+// createEditor() is defined in ui/Editor.cpp: the plugin layer does not know the editor
 
 //==============================================================================
 // What the state holds: every parameter of the APVTS. Not in it: nothing yet (no bypass,

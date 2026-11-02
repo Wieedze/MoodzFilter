@@ -70,6 +70,7 @@ ctest --test-dir Builds --output-on-failure
 ./Builds/MoodzFilterTools check                                  # finite output, block size independence
 ./Builds/MoodzFilterTools render Builds/renders                  # one WAV per case and signal
 ./Builds/MoodzFilterTools compare Builds/renders tests/golden    # against the references (plugin ADR 0003)
+xvfb-run -a ./Builds/MoodzFilterTools snapshot editor.png        # PNG of the editor (xvfb-run only on headless Linux)
 # Never refresh tests/golden/ to make compare pass: a reference changes only in a
 # separate "golden: <reason>" commit, after Maxime listened to the new renders.
 
@@ -108,7 +109,7 @@ VERSION                 single version number
 source/
   dsp/                  signal processing, static library `dsp`, never includes JUCE (CMake enforces it)
   plugin/               JUCE AudioProcessor, parameters, state (SharedCode)
-  ui/                   editor (SharedCode); createEditor() lives here
+  ui/                   editor (SharedCode): createEditor() returns the JUCE generic editor
 tools/                  MoodzFilterTools command line (render, compare, check); tools/core/ has no JUCE
 tests/
   dsp/                  DspTests, no JUCE

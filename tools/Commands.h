@@ -18,4 +18,7 @@ namespace moodz::tools
 
     // Fast battery through the real processor: finite output, block size independence.
     int runCheck();
+
+    // Writes a PNG of the plugin editor, for review (.claude/rules/ui.md).
+    int runSnapshot (const juce::File& pngFile);
 }

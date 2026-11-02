@@ -2,6 +2,8 @@
 
 #include "Rendering.h"
 
+#include "plugin/PluginProcessor.h"
+
 #include <juce_audio_formats/juce_audio_formats.h>
 
 #include <cmath>
@@ -218,6 +220,33 @@ namespace moodz::tools
 
         std::cout << (allPassed ? "compare: all files within tolerance\n" : "compare: FAILED\n");
         return allPassed ? exitOk : exitFailed;
+    }
+
+    int runSnapshot (const juce::File& pngFile)
+    {
+        PluginProcessor processor;
+        std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditorAndMakeActive());
+        if (editor == nullptr)
+        {
+            std::cerr << "the processor has no editor\n";
+            return exitFailed;
+        }
+
+        // Scale 2 so the PNG stays readable on high-density screens
+        const auto image = editor->createComponentSnapshot (editor->getLocalBounds(), true, 2.0f);
+        processor.editorBeingDeleted (editor.get());
+        editor.reset();
+
+        pngFile.deleteFile(); // FileOutputStream appends to an existing file
+        juce::FileOutputStream stream (pngFile);
+        juce::PNGImageFormat png;
+        if (!stream.openedOk() || !png.writeImageToStream (image, stream))
+        {
+            std::cerr << "cannot write " << pngFile.getFullPathName() << "\n";
+            return exitUsage;
+        }
+        std::cout << "wrote " << pngFile.getFileName() << " (" << image.getWidth() << " x " << image.getHeight() << ")\n";
+        return exitOk;
     }
 
     int runCheck()

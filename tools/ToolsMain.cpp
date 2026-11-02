@@ -17,6 +17,7 @@ namespace
                      "  render <dir>                 write one WAV per render case and test signal\n"
                      "  compare <renders> <golden>   compare the renders with the references of <golden>/manifest.json\n"
                      "  check                        finite output and block size independence through the plugin\n"
+                     "  snapshot <file.png>          PNG of the plugin editor, for review\n"
                      "  --help                       show this message\n"
                      "\n"
                      "Exit codes: 0 success, 1 check failed, 2 usage or input error.\n";
@@ -54,6 +55,8 @@ int main (int argc, char* argv[])
         return runCompare (argumentAsFile (argv[2]), argumentAsFile (argv[3]));
     if (command == "check" && argc == 2)
         return runCheck();
+    if (command == "snapshot" && argc == 3)
+        return runSnapshot (argumentAsFile (argv[2]));
 
     std::cerr << "Unknown command or wrong arguments: " << argv[1] << "\n\n";
     printUsage();
