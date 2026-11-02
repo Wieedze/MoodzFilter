@@ -1,0 +1,23 @@
+{
+  "format": 1,
+  "sampleRate": 48000,
+  "about": "References for MoodzFilterTools compare. Format: plugin ADR 0003. Changed only by a separate 'golden: <reason>' commit, approved by listening.",
+  "defaults": {
+    "maxAbsError": 1e-06,
+    "maxRmsErrorDbfs": -120
+  },
+  "files": {
+    "gain-automation__impulse.wav": {},
+    "gain-automation__pink-noise.wav": {},
+    "gain-automation__sine-1k.wav": {},
+    "gain-automation__sweep.wav": {},
+    "gain-plus6__impulse.wav": {},
+    "gain-plus6__pink-noise.wav": {},
+    "gain-plus6__sine-1k.wav": {},
+    "gain-plus6__sweep.wav": {},
+    "unity__impulse.wav": {},
+    "unity__pink-noise.wav": {},
+    "unity__sine-1k.wav": {},
+    "unity__sweep.wav": {}
+  }
+}
