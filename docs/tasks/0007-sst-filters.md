@@ -53,6 +53,8 @@ Playbook fiche `docs/references/surge-and-sst.md` §1.2: sst-filters has 41 mode
 * [x] Debug, Release, RTSan builds: 0 warnings, `ctest` green (36, 36, 37), `check` and `compare` unchanged (no plugin change), pluginval 10 SUCCESS.
 * [x] GLOSSARY: Filter model, Passband, Filter candidate added; Internal packet already defined.
 * [x] `rt-safety-reviewer` passed (one HIGH finding, cutoff above Nyquist after a lower prepare rate on OB-Xd, fixed in 23f29b0 with a test; low items fixed or noted in FUTURE.md), CI green (run 41533430686 on 23f29b0: Linux, Linux RealtimeSanitizer, Windows).
-* [ ] `task-verifier`: pass.
+* [x] `task-verifier`: pass.
 
 ## End note (filled by the task-verifier)
+
+Pass on 2026-11-02, second round. Round 1 failed on two items. The peak bound had been raised to 16 on a 6.4 figure that does not reproduce on the test signal (largest peak 2.59), and the per-packet coefficient call had no justification. Both were fixed in `0c743a5`: the bound is back to 4 and the test prints the peak; the comment cites sst-filters' 20 % per-call smoothing and its API contract. On `0c743a5`: Debug and Release 0 warnings, `ctest` 36/36; RTSan `ctest` 37/37 with the canary, `check` green; `check` and `compare` green; pluginval 10 `SUCCESS` (Release); clang-format clean on the new files; CPM pins are full hashes and match the fetched sources; all 7 candidates are in `availableModelConfigurations`; no change in `tests/golden/`. CI run 41533430686 was green on `23f29b0`, and run 41537528868 on `0c743a5` was in progress. Every Expected behaviour row is covered with its tolerance. Post-mortem: playbook `docs/plugins/moodzfilter/learning/0007-sst-filters.md`.
