@@ -40,10 +40,10 @@ Maxime chooses the 4 filter models by ear in Ableton Live, on his own music, ins
 
 ## Definition of done
 
-* [ ] Tests written first, seen red.
-* [ ] Debug, Release, RTSan: 0 warnings, `ctest` green, `check` green, `compare` green after the `golden:` commit.
-* [ ] pluginval 10 green, `rt-safety-reviewer` passed, CI green.
-* [ ] GLOSSARY checked before the verifier.
+* [x] Tests written first, seen red (plugin: 6 of 14 failing; model index invariant: did not compile before `toModelIndex`).
+* [x] Debug, Release, RTSan: 0 warnings, `ctest` green (42, 42, 43 with the canary), `check` green, `compare` green after the `golden:` commit (ac02387).
+* [ ] pluginval 10 green (SUCCESS, Release on f1fe643), `rt-safety-reviewer` passed (no blocking finding; model index bounded in the snapshot and DSP setters marked nonblocking in f1fe643), CI green.
+* [x] GLOSSARY checked before the verifier (Filter model, Filter candidate already defined; no new term).
 * [ ] **Maxime: the build loads in Live, the 7 models can be switched and heard; golden change accepted.**
 * [ ] `task-verifier`: pass.
 
