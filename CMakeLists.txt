@@ -109,13 +109,39 @@ add_library(SharedCode INTERFACE)
 pamplejuce_shared_code_defaults()
 
 
-# Manually list all .h and .cpp files for the plugin
-# If you are like me, you'll use globs for your sanity.
-# Just ensure you employ CONFIGURE_DEPENDS so the build system picks up changes
-# If you want to appease the CMake gods and avoid globs, manually add files like so:
-# set(SourceFiles Source/PluginEditor.h Source/PluginProcessor.h Source/PluginEditor.cpp Source/PluginProcessor.cpp)
-file(GLOB_RECURSE SourceFiles CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/source/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/source/*.h")
+# ---------------------------------------------------------------------------
+# dsp: the signal processing layer. A static library that never sees JUCE
+# (.claude/rules/dsp.md), so it is testable and benchmarkable on its own.
+# ---------------------------------------------------------------------------
+file(GLOB_RECURSE DspFiles CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/source/dsp/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/source/dsp/*.h")
+
+# Fail at configure time if a JUCE header sneaks into the dsp layer
+foreach (dsp_file IN LISTS DspFiles)
+    file(STRINGS "${dsp_file}" juce_includes REGEX "^[ \t]*#[ \t]*include[ \t]*[<\"]juce_")
+    if (juce_includes)
+        message(FATAL_ERROR "dsp layer must not include JUCE: ${dsp_file}")
+    endif ()
+endforeach ()
+
+add_library(dsp STATIC ${DspFiles})
+target_include_directories(dsp PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/source")
+target_compile_features(dsp PUBLIC cxx_std_23)
+set_target_properties(dsp PROPERTIES CXX_EXTENSIONS OFF POSITION_INDEPENDENT_CODE ON)
+# No fast math here: the dsp layer relies on IEEE behaviour (NaN and infinity checks)
+if (MSVC)
+    target_compile_options(dsp PRIVATE /W4 /WX)
+else ()
+    target_compile_options(dsp PRIVATE -Wall -Wextra -Werror)
+endif ()
+
+# ---------------------------------------------------------------------------
+# SharedCode: the JUCE plugin layer (source/plugin) and the editor (source/ui)
+# ---------------------------------------------------------------------------
+file(GLOB_RECURSE SourceFiles CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/plugin/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/source/plugin/*.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/ui/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/source/ui/*.h")
 target_sources(SharedCode INTERFACE ${SourceFiles})
+target_include_directories(SharedCode INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/source")
 
 # Adds a BinaryData target for embedding assets into the binary
 pamplejuce_add_assets()
@@ -152,6 +178,7 @@ target_compile_definitions(SharedCode
 # This allows the JUCE plugin targets and the Tests target to link against it
 target_link_libraries(SharedCode
     INTERFACE
+    dsp
     Assets
     $<$<CONFIG:Debug>:melatonin_inspector>
     juce_audio_utils
@@ -166,8 +193,33 @@ target_link_libraries(SharedCode
 # Link the JUCE plugin targets our SharedCode target
 target_link_libraries("${PROJECT_NAME}" PRIVATE SharedCode)
 
-# Everything related to the tests target
-pamplejuce_add_tests()
+# PluginTests: the plugin layer, with JUCE
+pamplejuce_add_tests(TARGET PluginTests DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests/plugin")
+
+# DspTests: the dsp layer alone, without JUCE, fast
+file(GLOB_RECURSE DspTestFiles CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tests/dsp/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/tests/dsp/*.h")
+add_executable(DspTests ${DspTestFiles})
+target_link_libraries(DspTests PRIVATE dsp Catch2::Catch2WithMain)
+set_target_properties(DspTests PROPERTIES CXX_EXTENSIONS OFF)
+catch_discover_tests(DspTests DISCOVERY_MODE PRE_TEST)
+
+# MoodzFilterTools: headless render, check, compare and bench (development only)
+if (CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(_moodz_tools_default OFF)
+else ()
+    set(_moodz_tools_default ON)
+endif ()
+option(MOODZ_BUILD_TOOLS "Build the MoodzFilterTools command line target" ${_moodz_tools_default})
+if (MOODZ_BUILD_TOOLS)
+    add_executable(MoodzFilterTools "${CMAKE_CURRENT_SOURCE_DIR}/tools/ToolsMain.cpp")
+    target_link_libraries(MoodzFilterTools PRIVATE dsp)
+    set_target_properties(MoodzFilterTools PROPERTIES CXX_EXTENSIONS OFF)
+    if (MSVC)
+        target_compile_options(MoodzFilterTools PRIVATE /W4 /WX)
+    else ()
+        target_compile_options(MoodzFilterTools PRIVATE -Wall -Wextra -Werror)
+    endif ()
+endif ()
 
 # A separate target for Benchmarks (keeps the Tests target fast)
 pamplejuce_add_benchmarks()

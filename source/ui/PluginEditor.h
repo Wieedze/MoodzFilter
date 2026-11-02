@@ -1,6 +1,6 @@
 #pragma once
 
-#include "PluginProcessor.h"
+#include "plugin/PluginProcessor.h"
 #include "BinaryData.h"
 #if MOODZ_WITH_INSPECTOR
     #include "melatonin_inspector/melatonin_inspector.h"
