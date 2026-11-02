@@ -39,13 +39,13 @@ namespace moodz::dsp
         bool configure (const FilterSetup& setup);
 
         void prepare (double sampleRate, int maxBlockSize);
-        void reset() noexcept;
+        void reset() noexcept MOODZ_NONBLOCKING;
 
         // Clamped to [minCutoffHz, maxCutoffHz]; non-finite ignored. In process, the cutoff is
         // also kept under 0.45 * sample rate, so it stays valid when prepare changes the rate.
-        void setCutoffHz (float hz) noexcept;
+        void setCutoffHz (float hz) noexcept MOODZ_NONBLOCKING;
         // Clamped to [0, 1]; non-finite ignored.
-        void setResonance (float amount) noexcept;
+        void setResonance (float amount) noexcept MOODZ_NONBLOCKING;
 
         // One or two channels; with one channel, the filter runs mono. Processes at most as many
         // samples as the shortest channel span holds.

@@ -35,6 +35,14 @@ namespace moodz::parameters
         return trimmed.containsIgnoreCase ("k") ? value * 1000.0f : value;
     }
 
+    int toModelIndex (float rawValue) noexcept
+    {
+        if (!std::isfinite (rawValue))
+            return 0;
+        constexpr auto last = static_cast<float> (dsp::filterCandidateCount - 1);
+        return static_cast<int> (std::clamp (rawValue, 0.0f, last) + 0.5f);
+    }
+
     juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
     {
         juce::AudioProcessorValueTreeState::ParameterLayout layout;
@@ -100,7 +108,7 @@ namespace moodz::parameters
         constexpr auto relaxed = std::memory_order_relaxed;
         return Params {
             gainOut->load (relaxed),
-            static_cast<int> (filterModel->load (relaxed) + 0.5f),
+            toModelIndex (filterModel->load (relaxed)),
             cutoff->load (relaxed),
             resonance->load (relaxed) / 100.0f,
         };

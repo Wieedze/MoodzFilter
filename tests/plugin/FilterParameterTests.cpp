@@ -140,3 +140,17 @@ TEST_CASE ("A state saved before the filter parameters loads with their defaults
     CHECK (parameter<juce::AudioParameterFloat> (processor, "resonance").get() == Catch::Approx (20.0f).margin (0.01));
     CHECK (parameter<juce::AudioParameterChoice> (processor, "filterModel").getIndex() == 0);
 }
+
+TEST_CASE ("The snapshot always gives a valid model index", "[plugin][filter]")
+{
+    // .claude/rules/juce.md: invariants applied in the snapshot. Converting NaN or an
+    // out-of-range float to int is undefined behaviour, so the index is bounded in float first.
+    using moodz::parameters::toModelIndex;
+    CHECK (toModelIndex (0.0f) == 0);
+    CHECK (toModelIndex (2.6f) == 3);
+    CHECK (toModelIndex (6.0f) == 6);
+    CHECK (toModelIndex (99.0f) == 6);
+    CHECK (toModelIndex (-3.0f) == 0);
+    CHECK (toModelIndex (std::numeric_limits<float>::quiet_NaN()) == 0);
+    CHECK (toModelIndex (std::numeric_limits<float>::infinity()) == 0);
+}

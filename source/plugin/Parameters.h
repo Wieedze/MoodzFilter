@@ -31,6 +31,10 @@ namespace moodz::parameters
 
     static_assert (std::atomic<float>::is_always_lock_free, "the audio thread reads parameters through std::atomic<float>");
 
+    // Model index from the raw choice value, always within the candidate list: NaN, infinity
+    // and out-of-range values are bounded in float before the conversion to int.
+    int toModelIndex (float rawValue) noexcept;
+
     // Plain copy of the parameter values, taken at the start of each block.
     // The dsp layer reads only this, never the APVTS.
     struct Params

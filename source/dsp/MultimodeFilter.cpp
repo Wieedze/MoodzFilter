@@ -59,7 +59,7 @@ namespace moodz::dsp
         packetPosition = 0;
     }
 
-    void MultimodeFilter::reset() noexcept
+    void MultimodeFilter::reset() noexcept MOODZ_NONBLOCKING
     {
         // A packet already opened with prepareBlock is closed first, so the next one starts clean
         if (ready && packetPosition != 0)
@@ -68,14 +68,14 @@ namespace moodz::dsp
         packetPosition = 0;
     }
 
-    void MultimodeFilter::setCutoffHz (float hz) noexcept
+    void MultimodeFilter::setCutoffHz (float hz) noexcept MOODZ_NONBLOCKING
     {
         if (!std::isfinite (hz))
             return;
         cutoffHz = std::clamp (hz, minCutoffHz, maxCutoffHz);
     }
 
-    void MultimodeFilter::setResonance (float amount) noexcept
+    void MultimodeFilter::setResonance (float amount) noexcept MOODZ_NONBLOCKING
     {
         if (!std::isfinite (amount))
             return;

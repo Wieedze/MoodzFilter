@@ -33,7 +33,7 @@ namespace moodz::dsp
         samplesLeft = 0;
     }
 
-    void SmoothedGain::setTargetDb (float gainDb) noexcept
+    void SmoothedGain::setTargetDb (float gainDb) noexcept MOODZ_NONBLOCKING
     {
         if (!std::isfinite (gainDb))
             return;
