@@ -42,13 +42,15 @@ Gain out follows the amended SPEC (playbook MoodzFilter ADR 0004): from silence 
 
 ## Definition of done
 
-* [ ] Tests changed and added first, seen red.
-* [ ] Debug, Release and RTSan builds: 0 warnings, `ctest` green, `check` green.
-* [ ] Snapshot PNG produced and looked at.
-* [ ] New references in a separate `golden:` commit; **Maxime approved them by listening.**
-* [ ] **Maxime: Gain out reaches silence and tops at +6 dB in Live; a saved session reloads with the value.**
-* [ ] GLOSSARY up to date (check before the verifier).
-* [ ] pluginval 10 green, `rt-safety-reviewer` passed, CI green.
-* [ ] `task-verifier`: pass.
+* [x] Tests changed and added first, seen red (DSP 2 of 9 failing, plugin 3 of 4 failing).
+* [x] Debug, Release and RTSan builds: 0 warnings, `ctest` green (25, 25, 26 with the canary), `check` green.
+* [x] Snapshot PNG produced and looked at (856 × 250, one "Gain out" slider at 0.0 dB; also attached to CI run 41524747297).
+* [x] New references in a separate `golden:` commit (ff69806); **Maxime approved them by listening on 2026-11-02 at 22:16 (CI artefact of run 41524747297).**
+* [x] **Maxime, 2026-11-02 22:16, Ableton Live on Windows with the installer of run 41524747297: generic editor shown, Gain out from `-inf` (silence) to `+6.0 dB`, saved session reloaded with the value kept ("tout est parfait").**
+* [x] GLOSSARY up to date (Generic editor, Silence floor).
+* [x] pluginval 10 green, `rt-safety-reviewer` passed (no finding; non-finite input guard noted in FUTURE.md), CI green (run 41524747297 on ae7f615: Linux, Linux RealtimeSanitizer, Windows).
+* [x] `task-verifier`: pass.
 
 ## End note (filled by the task-verifier)
+
+Pass on 2026-11-02, first round. Debug and Release: 0 warnings, `ctest` 25/25; RTSan: `ctest` 26/26 with the canary, `check` green; `check` and `compare` green (16 renders, max error 0); pluginval 10 `SUCCESS`; snapshot 856 × 250 looked at; only `ff69806` touches `tests/golden/`; CI run 41524747297 green on Linux, Linux RealtimeSanitizer and Windows. Every Expected behaviour row is covered with its tolerance. Files outside the announced layers (CI workflow, `benchmarks/Catch2Main.cpp`, the `MOODZ_WITH_INSPECTOR` define) follow from the snapshot row and the deleted template editor. Gate 1 is passed with Maxime's Live test of 22:16. Post-mortem: playbook `docs/plugins/moodzfilter/learning/0006-gain-range-generic-editor.md`.
