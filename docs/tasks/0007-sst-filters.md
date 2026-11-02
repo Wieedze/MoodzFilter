@@ -25,6 +25,10 @@ The SPEC targets a clean multimode, a ladder, an OB-X style model and a diode. C
 | Block of 0 samples | any | no crash, packet position unchanged | — | `.claude/rules/realtime-audio.md` |
 | Stereo, same input on both channels | any candidate | left = right | exact | linked stereo (SPEC) |
 | RTSan build | `process` marked `MOODZ_NONBLOCKING` | no report | — | `.claude/rules/realtime-audio.md` |
+| Cutoff 20 kHz, resonance 1 set at 48 kHz, then `prepare` at 32 kHz (added after the rt-safety review) | every candidate | every sample finite | exact | `.claude/rules/dsp.md` |
+| Finite at the bounds (above) also at 44.1, 96 and 192 kHz, peak bound 16 (a runaway guard: near self-oscillation the Cytomic SVF reaches 6.4) | every candidate | finite, peak < 16 | exact | same |
+| `reset()` after 7 samples (inside a packet) | every candidate | next render identical to a fresh filter | exact | same as `reset` |
+| `numSamples` larger than the spans | Cytomic LP | samples past the spans untouched | exact | `.claude/rules/cpp.md` (spans) |
 
 ## Out of scope
 
@@ -44,12 +48,12 @@ Playbook fiche `docs/references/surge-and-sst.md` §1.2: sst-filters has 41 mode
 
 ## Definition of done
 
-* [ ] sst-basic-blocks and sst-filters pulled by CPM at pinned commits, their headers as system includes (no warning from them under `-Werror`).
-* [ ] MoodzFilter ADR 0005 (playbook) records the GPL v3 dependency.
-* [ ] Tests written first, seen red, then green.
-* [ ] Debug, Release, RTSan builds: 0 warnings, `ctest` green, `check` and `compare` unchanged (no plugin change).
-* [ ] GLOSSARY: Filter model, Passband, Internal packet (check before the verifier).
-* [ ] `rt-safety-reviewer` passed, CI green.
+* [x] sst-basic-blocks and sst-filters pulled by CPM at pinned commits, their headers as system includes (no warning from them under `-Werror`).
+* [x] MoodzFilter ADR 0005 (playbook) records the GPL v3 dependency.
+* [x] Tests written first, seen red (8 of 8 against a stub; review tests: sample rate drop and short spans red), then green.
+* [x] Debug, Release, RTSan builds: 0 warnings, `ctest` green (36, 36, 37), `check` and `compare` unchanged (no plugin change), pluginval 10 SUCCESS.
+* [x] GLOSSARY: Filter model, Passband, Filter candidate added; Internal packet already defined.
+* [x] `rt-safety-reviewer` passed (one HIGH finding, cutoff above Nyquist after a lower prepare rate on OB-Xd, fixed in 23f29b0 with a test; low items fixed or noted in FUTURE.md), CI green (run 41533430686 on 23f29b0: Linux, Linux RealtimeSanitizer, Windows).
 * [ ] `task-verifier`: pass.
 
 ## End note (filled by the task-verifier)
