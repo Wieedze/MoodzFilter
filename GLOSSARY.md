@@ -21,6 +21,8 @@ Vocabulary shared between you, the agents and the code (Matt Pocock convention: 
 | **Golden reference** | Reference WAV render in `tests/golden/`, compared on every PR |
 | **Test signal** | Standardised input of a test: impulse, sine, sweep, pink noise, loop |
 | **Gate** | Condition to meet to move from one phase to the next |
+| **Layer** | One of `dsp` (signal processing, no JUCE), `plugin` (JUCE processor, parameters, state), `ui` (editor). Each lives in its own folder of `source/`; only `plugin` and `ui` see JUCE |
+| **Tools** | The `MoodzFilterTools` command line: render, check, compare, bench. Development only, never shipped |
 | **Vertical slice** | Small piece of functionality that crosses all the layers it needs and can be tested on its own |
 | **ADAA** | Antiderivative anti-aliasing: reduces the aliasing of a saturation without oversampling everything |
 | **ZDF** | Zero delay feedback: virtual analogue filter with no delay in the feedback loop |

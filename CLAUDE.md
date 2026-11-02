@@ -61,9 +61,13 @@ cmake -B Builds -G Ninja -DCMAKE_BUILD_TYPE=Debug
 # Build
 cmake --build Builds
 
-# Tests
+# Tests (DspTests: dsp layer without JUCE; PluginTests: plugin layer)
 ctest --test-dir Builds --output-on-failure
-./Builds/Tests "[test name]"
+./Builds/DspTests "[tag]"
+./Builds/PluginTests "[test name]"
+
+# Command line tools (ON by default, OFF in Release; -DMOODZ_BUILD_TOOLS=ON to force)
+./Builds/MoodzFilterTools --help
 
 # Benchmarks
 ./Builds/Benchmarks
@@ -86,8 +90,14 @@ GLOSSARY.md             shared vocabulary
 FUTURE.md               requested, deliberately not built
 CMakeLists.txt          identity, formats, targets
 VERSION                 single version number
-source/                 plugin code (split into dsp/ plugin/ ui/ in task 0002)
-tests/                  Catch2 tests
+source/
+  dsp/                  signal processing, static library `dsp`, never includes JUCE (CMake enforces it)
+  plugin/               JUCE AudioProcessor, parameters, state (SharedCode)
+  ui/                   editor (SharedCode); createEditor() lives here
+tools/                  MoodzFilterTools command line (render, check, compare, bench)
+tests/
+  dsp/                  DspTests, no JUCE
+  plugin/               PluginTests, with JUCE
 benchmarks/             Catch2 benchmarks
 cmake/                  Pamplejuce CMake modules (submodule)
 JUCE/                   JUCE 9.0.5 (submodule, pinned tag)

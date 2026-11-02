@@ -1,5 +1,4 @@
-#include "PluginProcessor.h"
-#include "PluginEditor.h"
+#include "plugin/PluginProcessor.h"
 
 //==============================================================================
 PluginProcessor::PluginProcessor()
@@ -158,10 +157,7 @@ bool PluginProcessor::hasEditor() const
     return true; // (change this to false if you choose to not supply an editor)
 }
 
-juce::AudioProcessorEditor* PluginProcessor::createEditor()
-{
-    return new PluginEditor (*this);
-}
+// createEditor() is defined in ui/PluginEditor.cpp: the plugin layer does not know the editor
 
 //==============================================================================
 void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)
