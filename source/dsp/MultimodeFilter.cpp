@@ -1,0 +1,108 @@
+#include "dsp/MultimodeFilter.h"
+
+#include <algorithm>
+#include <cmath>
+
+namespace moodz::dsp
+{
+    namespace
+    {
+        // sst-filters takes the cutoff as a note offset from A4: f = 440 * 2^(n / 12)
+        // (sst-filters CytomicSVFQuadForm.h, `440 * note_to_pitch_ignoring_tuning`)
+        float hertzToNote (float hz) noexcept
+        {
+            return 12.0f * std::log2 (hz / 440.0f);
+        }
+    }
+
+    bool MultimodeFilter::configure (const FilterSetup& newSetup)
+    {
+        namespace sfpp = sst::filtersplusplus;
+
+        // Comb models need caller-owned delay memory: not supported by this processor
+        if (sfpp::Filter::requiredDelayLinesSizes (newSetup.model, newSetup.config) != 0)
+            return false;
+
+        sfpp::Filter probe;
+        probe.setSampleRateAndBlockSize (sampleRate, packetSize);
+        probe.setFilterModel (newSetup.model);
+        probe.setModelConfiguration (newSetup.config);
+        if (!probe.prepareInstance())
+            return false;
+
+        setup = newSetup;
+        prepare (sampleRate, packetSize);
+        return true;
+    }
+
+    void MultimodeFilter::prepare (double newSampleRate, int /* maxBlockSize */)
+    {
+        // The filter works in packets of packetSize, whatever the host block size
+        sampleRate = newSampleRate > 0.0 ? newSampleRate : 48000.0;
+        filter.setSampleRateAndBlockSize (sampleRate, packetSize);
+        filter.setFilterModel (setup.model);
+        filter.setModelConfiguration (setup.config);
+        ready = setup.model != sst::filtersplusplus::FilterModel::None && filter.prepareInstance();
+        filter.setStereo();
+        filter.init();
+        packetPosition = 0;
+    }
+
+    void MultimodeFilter::reset() noexcept
+    {
+        // A packet already opened with prepareBlock is closed first, so the next one starts clean
+        if (ready && packetPosition != 0)
+            filter.concludeBlock();
+        filter.reset();
+        packetPosition = 0;
+    }
+
+    void MultimodeFilter::setCutoffHz (float hz) noexcept
+    {
+        if (!std::isfinite (hz))
+            return;
+        const auto nyquistGuard = static_cast<float> (0.45 * sampleRate);
+        cutoffHz = std::clamp (hz, minCutoffHz, std::min (maxCutoffHz, nyquistGuard));
+    }
+
+    void MultimodeFilter::setResonance (float amount) noexcept
+    {
+        if (!std::isfinite (amount))
+            return;
+        resonance = std::clamp (amount, 0.0f, 1.0f);
+    }
+
+    void MultimodeFilter::process (std::span<const std::span<float>> channels, int numSamples) noexcept MOODZ_NONBLOCKING
+    {
+        if (!ready || channels.empty())
+            return;
+
+        auto& left = channels[0];
+        const bool stereo = channels.size() > 1;
+
+        for (int i = 0; i < numSamples; ++i)
+        {
+            if (packetPosition == 0)
+            {
+                // Linked stereo: compute the coefficients once, copy them to the second voice
+                filter.makeCoefficients (0, hertzToNote (cutoffHz), resonance);
+                filter.copyCoefficientsFromVoiceToVoice (0, 1);
+                filter.prepareBlock();
+            }
+
+            const auto index = static_cast<size_t> (i);
+            float outLeft = 0.0f;
+            float outRight = 0.0f;
+            filter.processStereoSample (left[index], stereo ? channels[1][index] : left[index], outLeft, outRight);
+            left[index] = outLeft;
+            if (stereo)
+                channels[1][index] = outRight;
+
+            if (++packetPosition == packetSize)
+            {
+                filter.concludeBlock();
+                packetPosition = 0;
+            }
+        }
+    }
+}
