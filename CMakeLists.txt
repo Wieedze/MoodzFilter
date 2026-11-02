@@ -200,6 +200,7 @@ pamplejuce_add_tests(TARGET PluginTests DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/t
 file(GLOB_RECURSE DspTestFiles CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tests/dsp/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/tests/dsp/*.h")
 add_executable(DspTests ${DspTestFiles})
 target_link_libraries(DspTests PRIVATE dsp Catch2::Catch2WithMain)
+set_target_properties(DspTests PROPERTIES CXX_EXTENSIONS OFF)
 catch_discover_tests(DspTests DISCOVERY_MODE PRE_TEST)
 
 # MoodzFilterTools: headless render, check, compare and bench (development only)
@@ -212,6 +213,7 @@ option(MOODZ_BUILD_TOOLS "Build the MoodzFilterTools command line target" ${_moo
 if (MOODZ_BUILD_TOOLS)
     add_executable(MoodzFilterTools "${CMAKE_CURRENT_SOURCE_DIR}/tools/ToolsMain.cpp")
     target_link_libraries(MoodzFilterTools PRIVATE dsp)
+    set_target_properties(MoodzFilterTools PROPERTIES CXX_EXTENSIONS OFF)
     if (MSVC)
         target_compile_options(MoodzFilterTools PRIVATE /W4 /WX)
     else ()

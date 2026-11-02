@@ -45,7 +45,7 @@ The code is split into the layers of the playbook architecture: a `dsp` static l
 * [x] `DspTests` (links `dsp`, `Catch2::Catch2WithMain`) and `PluginTests` (via `pamplejuce_add_tests`) discovered by `ctest`.
 * [x] `MoodzFilterTools` target behind `MOODZ_BUILD_TOOLS`.
 * [x] `CLAUDE.md` build commands and repo map updated.
-* [ ] Builds with no warning, `ctest` green, pluginval 10 green, CI green.
+* [x] Builds with no warning, `ctest` green, pluginval 10 green, CI green (run 41477871641).
 * [ ] `task-verifier`: pass.
 
 ## End note (filled by the task-verifier)
