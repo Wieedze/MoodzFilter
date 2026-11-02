@@ -86,9 +86,10 @@ void PluginProcessor::changeProgramName (int index, const juce::String& newName)
 //==============================================================================
 void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    // Use this method as the place to do any pre-playback
-    // initialisation that you need..
-    juce::ignoreUnused (sampleRate, samplesPerBlock);
+    gainOut.prepare (sampleRate, samplesPerBlock);
+    // Start at the current parameter value, without a ramp from the default
+    gainOut.setTargetDb (snapshotter.snapshot().gainOutDb);
+    gainOut.reset();
 }
 
 void PluginProcessor::releaseResources()
@@ -143,12 +144,17 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     // the samples and the outer loop is handling the channels.
     // Alternatively, you can process the samples with the channels
     // interleaved by keeping the same state.
-    for (int channel = 0; channel < totalNumInputChannels; ++channel)
-    {
-        auto* channelData = buffer.getWritePointer (channel);
-        juce::ignoreUnused (channelData);
-        // ..do something to the data...
-    }
+    const auto params = snapshotter.snapshot();
+    gainOut.setTargetDb (params.gainOutDb);
+
+    // Mono or stereo only (isBusesLayoutSupported), so two spans are enough
+    const auto numSamples = buffer.getNumSamples();
+    const auto numChannels = std::min (totalNumOutputChannels, 2);
+    std::array<std::span<float>, 2> channels {};
+    for (int channel = 0; channel < numChannels; ++channel)
+        channels[static_cast<size_t> (channel)] = { buffer.getWritePointer (channel), static_cast<size_t> (numSamples) };
+
+    gainOut.process (std::span { channels.data(), static_cast<size_t> (numChannels) }, numSamples);
 }
 
 //==============================================================================
@@ -160,19 +166,27 @@ bool PluginProcessor::hasEditor() const
 // createEditor() is defined in ui/PluginEditor.cpp: the plugin layer does not know the editor
 
 //==============================================================================
+// What the state holds: every parameter of the APVTS. Not in it: nothing yet (no bypass,
+// no session settings). A state written before stateVersion existed is read as version 1.
 void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    // You should use this method to store your parameters in the memory block.
-    // You could do that either as raw data, or use the XML or ValueTree classes
-    // as intermediaries to make it easy to save and load complex data.
-    juce::ignoreUnused (destData);
+    auto copy = state.copyState();
+    std::unique_ptr<juce::XmlElement> xml (copy.createXml());
+    xml->setAttribute ("stateVersion", stateVersion);
+    copyXmlToBinary (*xml, destData);
 }
 
 void PluginProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    // You should use this method to restore your parameters from this memory block,
-    // whose contents will have been created by the getStateInformation() call.
-    juce::ignoreUnused (data, sizeInBytes);
+    const auto xml = getXmlFromBinary (data, sizeInBytes);
+    if (xml == nullptr || ! xml->hasTagName (state.state.getType()))
+        return;
+
+    // Version 1 is the only one so far; a missing attribute means version 1 too
+    const auto version = xml->getIntAttribute ("stateVersion", 1);
+    juce::ignoreUnused (version);
+
+    state.replaceState (juce::ValueTree::fromXml (*xml));
 }
 
 //==============================================================================
