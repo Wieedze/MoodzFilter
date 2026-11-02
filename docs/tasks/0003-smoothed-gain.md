@@ -51,7 +51,23 @@ The first vertical slice through every layer: the SPEC's `Gain out` parameter (â
 * [x] pluginval 10 green.
 * [x] `rt-safety-reviewer` passed (no finding on the audio path; its 3 defensive suggestions applied in bf04265).
 * [x] `GLOSSARY.md` up to date (no new term: Params, Smoothing, Parameter ID, State already defined).
-* [x] CI green (run 41488213810 on bf04265, Linux and Windows).
-* [ ] `task-verifier`: pass.
+* [x] CI green (run 41490179737 on 6682553, Linux and Windows; earlier run 41488213810 on bf04265).
+* [x] `task-verifier`: pass.
 
 ## End note (filled by the task-verifier)
+
+Pass on 2026-11-02, after 2 rounds.
+
+* Round 1 failed on three items, all fixed in `6682553`:
+  * the block-size test compared block sizes 7 and 480 without a mid-signal change;
+  * one new clang-format violation in `setStateInformation`;
+  * `std::pow` ran on every block even when the target had not changed.
+* Final checks on `6682553`:
+  * Debug and Release builds: 0 warnings.
+  * ctest: 17/17 passed in both builds.
+  * pluginval at strictness 10: SUCCESS.
+  * New files are clean under clang-format.
+  * CI run 41490179737: green on Linux and Windows.
+* `tools check` and `tools compare` belong to task 0004.
+* Moved to the Green CI task: `[[clang::nonblocking]]` and the RTSan job.
+* Post-mortem: playbook `docs/plugins/moodzfilter/learning/0003-smoothed-gain.md`.
