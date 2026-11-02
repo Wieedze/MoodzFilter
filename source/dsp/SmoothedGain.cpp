@@ -16,7 +16,10 @@ namespace moodz::dsp
 
     void SmoothedGain::prepare (double sampleRate, int /* maxBlockSize */) noexcept
     {
-        rampLengthSamples = std::max (1, static_cast<int> (std::lround (sampleRate * rampSeconds)));
+        // A non-finite, non-positive or absurd rate would make lround and the cast to int
+        // undefined: fall back to a one-sample ramp, which is still click-free at any real rate.
+        const bool validRate = sampleRate > 0.0 && sampleRate < 10'000'000.0;
+        rampLengthSamples = validRate ? std::max (1, static_cast<int> (std::lround (sampleRate * rampSeconds))) : 1;
         reset();
     }
 

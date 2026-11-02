@@ -149,7 +149,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
     // Mono or stereo only (isBusesLayoutSupported), so two spans are enough
     const auto numSamples = buffer.getNumSamples();
-    const auto numChannels = std::min (totalNumOutputChannels, 2);
+    const auto numChannels = std::min ({ totalNumOutputChannels, buffer.getNumChannels(), 2 });
     std::array<std::span<float>, 2> channels {};
     for (int channel = 0; channel < numChannels; ++channel)
         channels[static_cast<size_t> (channel)] = { buffer.getWritePointer (channel), static_cast<size_t> (numSamples) };

@@ -216,3 +216,23 @@ TEST_CASE ("SmoothedGain processes linked channels identically", "[dsp][gain]")
     for (size_t i = 0; i < left.size(); ++i)
         REQUIRE (left[i] == Catch::Approx (right[i]).margin (1e-9));
 }
+
+TEST_CASE ("SmoothedGain survives an invalid sample rate", "[dsp][gain]")
+{
+    // prepare() with a NaN, zero or absurd rate must not leave a garbage ramp length:
+    // the gain still reaches its target within a bounded number of samples and stays finite.
+    for (double badRate : { std::numeric_limits<double>::quiet_NaN(), 0.0, -48000.0, 1e300 })
+    {
+        SmoothedGain gain;
+        gain.prepare (badRate, 512);
+        gain.setTargetDb (0.0f);
+        gain.reset();
+        gain.setTargetDb (6.0f);
+
+        std::vector<float> dc (48000, 1.0f);
+        processMono (gain, dc);
+        for (auto s : dc)
+            REQUIRE (std::isfinite (s));
+        CHECK (dc.back() == Catch::Approx (gainPlus6Db).margin (1e-5));
+    }
+}

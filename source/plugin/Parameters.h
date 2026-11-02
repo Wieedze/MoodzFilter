@@ -17,6 +17,8 @@ namespace moodz::parameters
 
     juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
 
+    static_assert (std::atomic<float>::is_always_lock_free, "the audio thread reads parameters through std::atomic<float>");
+
     // Plain copy of the parameter values, taken at the start of each block.
     // The dsp layer reads only this, never the APVTS.
     struct Params
