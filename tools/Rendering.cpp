@@ -11,13 +11,18 @@ namespace moodz::tools
 {
     namespace
     {
-        juce::AudioParameterFloat& gainOutParameter (PluginProcessor& processor)
+        juce::AudioParameterFloat& floatParameter (PluginProcessor& processor, const char* id)
         {
             for (auto* parameter : processor.getParameters())
-                if (auto* floatParameter = dynamic_cast<juce::AudioParameterFloat*> (parameter))
-                    if (floatParameter->paramID == parameters::id::gainOut)
-                        return *floatParameter;
-            throw std::runtime_error ("gainOut parameter not found");
+                if (auto* typed = dynamic_cast<juce::AudioParameterFloat*> (parameter))
+                    if (typed->paramID == id)
+                        return *typed;
+            throw std::runtime_error (std::string (id) + " parameter not found");
+        }
+
+        juce::AudioParameterFloat& gainOutParameter (PluginProcessor& processor)
+        {
+            return floatParameter (processor, parameters::id::gainOut);
         }
     }
 
@@ -58,6 +63,9 @@ namespace moodz::tools
         PluginProcessor processor;
         processor.setPlayConfigDetails (numChannels, numChannels, renderSampleRate, blockSize);
         gainOutParameter (processor) = renderCase.startDb;
+        // The gain cases render with the filter as open as it goes (task 0008)
+        floatParameter (processor, parameters::id::cutoff) = 20000.0f;
+        floatParameter (processor, parameters::id::resonance) = 0.0f;
         processor.prepareToPlay (renderSampleRate, blockSize);
 
         juce::AudioBuffer<float> output (numChannels, total);

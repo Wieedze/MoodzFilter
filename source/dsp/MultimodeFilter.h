@@ -14,7 +14,8 @@ namespace moodz::dsp
     {
         sst::filtersplusplus::FilterModel model = sst::filtersplusplus::FilterModel::None;
         sst::filtersplusplus::ModelConfig config {};
-        std::string name;
+        std::string name; // stable identifier, used in file names
+        std::string label; // shown to the user
     };
 
     // One sst-filters model on linked stereo (the same coefficients on both channels, SPEC).

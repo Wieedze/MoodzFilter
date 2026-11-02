@@ -1,5 +1,6 @@
 #include "plugin/Parameters.h"
 
+#include "dsp/FilterCandidates.h"
 #include "dsp/SmoothedGain.h"
 
 namespace moodz::parameters
@@ -19,6 +20,21 @@ namespace moodz::parameters
         return trimmed.getFloatValue();
     }
 
+    juce::String hertzToText (float hz)
+    {
+        // Rounded first, so that 999.99 (1 kHz after a trip through the control) reads 1.00 kHz
+        if (juce::roundToInt (hz) < 1000)
+            return juce::String (juce::roundToInt (hz)) + " Hz";
+        return juce::String (hz / 1000.0f, 2) + " kHz";
+    }
+
+    float textToHertz (const juce::String& text)
+    {
+        const auto trimmed = text.trim();
+        const auto value = trimmed.getFloatValue();
+        return trimmed.containsIgnoreCase ("k") ? value * 1000.0f : value;
+    }
+
     juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
     {
         juce::AudioProcessorValueTreeState::ParameterLayout layout;
@@ -30,7 +46,7 @@ namespace moodz::parameters
         gainOutRange.setSkewForCentre (-12.0f);
 
         layout.add (std::make_unique<juce::AudioParameterFloat> (
-            juce::ParameterID { id::gainOut, version },
+            juce::ParameterID { id::gainOut, 1 },
             "Gain out",
             gainOutRange,
             0.0f,
@@ -38,17 +54,55 @@ namespace moodz::parameters
                 .withStringFromValueFunction ([] (float db, int) { return decibelsToText (db); })
                 .withValueFromStringFunction ([] (const juce::String& text) { return textToDecibels (text); })));
 
+        // Task 0008, audition build: the 7 filter candidates, chosen by ear in Live; task 0009
+        // keeps 4 (SPEC). Default: the first candidate (SPEC "Model 1").
+        juce::StringArray modelNames;
+        for (const auto& candidate : dsp::filterCandidates())
+            modelNames.add (candidate.label);
+        layout.add (std::make_unique<juce::AudioParameterChoice> (
+            juce::ParameterID { id::filterModel, version }, "Model", modelNames, 0));
+
+        // SPEC: Cutoff 20 Hz to 20 kHz, logarithmic, default 1 kHz. Skew centred on
+        // sqrt(20 * 20000) = 632 Hz, so equal control travel gives equal frequency ratios.
+        juce::NormalisableRange<float> cutoffRange { dsp::MultimodeFilter::minCutoffHz, dsp::MultimodeFilter::maxCutoffHz };
+        cutoffRange.setSkewForCentre (std::sqrt (dsp::MultimodeFilter::minCutoffHz * dsp::MultimodeFilter::maxCutoffHz));
+        layout.add (std::make_unique<juce::AudioParameterFloat> (
+            juce::ParameterID { id::cutoff, version },
+            "Cutoff",
+            cutoffRange,
+            1000.0f,
+            juce::AudioParameterFloatAttributes {}
+                .withStringFromValueFunction ([] (float hz, int) { return hertzToText (hz); })
+                .withValueFromStringFunction ([] (const juce::String& text) { return textToHertz (text); })));
+
+        // SPEC: Resonance 0 to 100 %, default 20 %
+        layout.add (std::make_unique<juce::AudioParameterFloat> (
+            juce::ParameterID { id::resonance, version },
+            "Resonance",
+            juce::NormalisableRange<float> { 0.0f, 100.0f, 0.1f },
+            20.0f,
+            juce::AudioParameterFloatAttributes {}.withLabel ("%")));
+
         return layout;
     }
 
     Snapshotter::Snapshotter (const juce::AudioProcessorValueTreeState& state)
-        : gainOut (state.getRawParameterValue (id::gainOut))
+        : gainOut (state.getRawParameterValue (id::gainOut)),
+          filterModel (state.getRawParameterValue (id::filterModel)),
+          cutoff (state.getRawParameterValue (id::cutoff)),
+          resonance (state.getRawParameterValue (id::resonance))
     {
-        jassert (gainOut != nullptr);
+        jassert (gainOut != nullptr && filterModel != nullptr && cutoff != nullptr && resonance != nullptr);
     }
 
     Params Snapshotter::snapshot() const noexcept
     {
-        return Params { gainOut->load (std::memory_order_relaxed) };
+        constexpr auto relaxed = std::memory_order_relaxed;
+        return Params {
+            gainOut->load (relaxed),
+            static_cast<int> (filterModel->load (relaxed) + 0.5f),
+            cutoff->load (relaxed),
+            resonance->load (relaxed) / 100.0f,
+        };
     }
 }

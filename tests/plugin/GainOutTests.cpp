@@ -29,7 +29,7 @@ TEST_CASE ("Parameter IDs are frozen", "[plugin][parameters]")
 {
     // .claude/rules/juce.md: an ID is never renamed or removed. Adding a parameter means
     // adding its ID here on purpose; a rename or removal makes this test fail.
-    const std::set<std::string> expected { "gainOut" };
+    const std::set<std::string> expected { "gainOut", "filterModel", "cutoff", "resonance" };
 
     PluginProcessor processor;
     std::set<std::string> actual;
@@ -80,11 +80,17 @@ TEST_CASE ("Gain out is applied to both channels", "[plugin][gain]")
     floatParameter (processor, "gainOut") = 6.0f;
     processor.prepareToPlay (48000.0, 256);
 
+    // Since task 0008 the filter (low pass, 1 kHz by default) precedes Gain out: a constant
+    // input goes through its rise first. 20 blocks (about 107 ms) let it settle, so the last
+    // block shows the gain alone (a low pass passes DC with a gain of 1).
     juce::AudioBuffer<float> buffer (2, 256);
-    for (int channel = 0; channel < 2; ++channel)
-        juce::FloatVectorOperations::fill (buffer.getWritePointer (channel), 0.25f, 256);
     juce::MidiBuffer midi;
-    processor.processBlock (buffer, midi);
+    for (int block = 0; block < 20; ++block)
+    {
+        for (int channel = 0; channel < 2; ++channel)
+            juce::FloatVectorOperations::fill (buffer.getWritePointer (channel), 0.25f, 256);
+        processor.processBlock (buffer, midi);
+    }
 
     // 0.25 * 10^(6/20) = 0.498816 (Python 3: 0.25*10**(6/20))
     for (int channel = 0; channel < 2; ++channel)

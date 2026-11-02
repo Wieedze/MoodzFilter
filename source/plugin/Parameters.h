@@ -10,16 +10,24 @@ namespace moodz::parameters
     namespace id
     {
         inline constexpr const char* gainOut = "gainOut";
+        inline constexpr const char* filterModel = "filterModel";
+        inline constexpr const char* cutoff = "cutoff";
+        inline constexpr const char* resonance = "resonance";
     }
 
-    // Parameter version passed to juce::ParameterID, incremented with every addition.
-    inline constexpr int version = 1;
+    // Parameter version passed to juce::ParameterID, incremented with every addition:
+    // 1 = gainOut (task 0003), 2 = filterModel, cutoff, resonance (task 0008).
+    inline constexpr int version = 2;
 
     juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
 
     // Display of gain values: "-inf" at the silence floor, otherwise "+6.0 dB", "-12.5 dB"
     juce::String decibelsToText (float db);
     float textToDecibels (const juce::String& text);
+
+    // Display of frequencies: "440 Hz" below 1 kHz, "1.00 kHz" above
+    juce::String hertzToText (float hz);
+    float textToHertz (const juce::String& text);
 
     static_assert (std::atomic<float>::is_always_lock_free, "the audio thread reads parameters through std::atomic<float>");
 
@@ -28,6 +36,9 @@ namespace moodz::parameters
     struct Params
     {
         float gainOutDb = 0.0f;
+        int filterModel = 0;
+        float cutoffHz = 1000.0f;
+        float resonance = 0.2f; // 0..1, from the 0..100 % parameter
     };
 
     // Raw atomic values, looked up once so that a snapshot needs no string lookup.
@@ -39,5 +50,8 @@ namespace moodz::parameters
 
     private:
         const std::atomic<float>* gainOut;
+        const std::atomic<float>* filterModel;
+        const std::atomic<float>* cutoff;
+        const std::atomic<float>* resonance;
     };
 }
