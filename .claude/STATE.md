@@ -8,7 +8,7 @@ Maintained by hand. A task does not close without updating this file.
 | Current phase | 1 (skeleton) |
 | Gate to pass | Gate 1: green CI, green pluginval 10, VST3 loaded in Ableton Live (Windows), `STATE.md` up to date |
 | Plugin identity (ADR 0002) | `Rdkm` / `Mzf1`, VST3 only, Windows only for v1. Final once a session is saved in Live |
-| Current task | 0001 Initialise the repo from Pamplejuce (in review) |
+| Current task | 0002 Separate the `dsp`, `plugin`, `ui`, `tools` targets (next). 0001 Initialise the repo from Pamplejuce: done 2026-11-02, task-verifier pass |
 | Pinned JUCE version | 9.0.5 |
 | CPU budget per block | — |
 | Known defects (sound, perf, hosts) | — |

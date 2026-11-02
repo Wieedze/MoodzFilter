@@ -44,7 +44,9 @@ The Pamplejuce template becomes MoodzFilter: its identity, VST3 only, JUCE pinne
 * [x] `LICENSE` is AGPLv3 (plugin ADR 0001); the Pamplejuce MIT notice kept in `THIRD_PARTY_NOTICES.txt`.
 * [x] Playbook layer copied: `.claude/rules`, `.claude/agents`, templates, `GLOSSARY.md`, `docs/tasks/TEMPLATE.md`; router `CLAUDE.md` replaces the template's.
 * [x] `cmake --build` with no warning, `ctest` green, pluginval 10 green (Linux).
-* [ ] CI green on GitHub (Linux, Windows).
-* [ ] `task-verifier`: pass.
+* [x] CI green on GitHub (Linux, Windows): run 41461476342.
+* [x] `task-verifier`: pass.
 
 ## End note (filled by the task-verifier)
+
+2026-11-02, task-verifier: **pass** (1 round). Every row of "Expected behaviour" checked: name and no-MIDI tests green, only `VST3/MoodzFilter.vst3` built, JUCE at tag `9.0.5` with no `branch =`, clean Release build with 0 warnings, Debug rebuild with no warning, pluginval 1.0.4 strictness 10 `SUCCESS` on the Release VST3, CI run 41461476342 green on Linux and Windows for `aaab18e`. The CI platform list deviates from `.claude/rules/build.md` (no macOS) but follows plugin ADR 0002; follow-up to align the rule is in the post-mortem. Post-mortem: playbook `docs/plugins/moodzfilter/learning/0001-init-from-pamplejuce.md`.
