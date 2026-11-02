@@ -1,5 +1,7 @@
 #pragma once
 
+#include "dsp/Realtime.h"
+
 #include <span>
 
 namespace moodz::dsp
@@ -23,7 +25,7 @@ namespace moodz::dsp
 
         // Every channel span must hold at least numSamples samples. The same gain
         // is applied to all channels (linked stereo, SPEC).
-        void process (std::span<const std::span<float>> channels, int numSamples) noexcept;
+        void process (std::span<const std::span<float>> channels, int numSamples) noexcept MOODZ_NONBLOCKING;
 
     private:
         int rampLengthSamples = 1;

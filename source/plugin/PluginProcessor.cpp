@@ -121,7 +121,7 @@ bool PluginProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 }
 
 void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer,
-                                              juce::MidiBuffer& midiMessages)
+                                              juce::MidiBuffer& midiMessages) noexcept MOODZ_NONBLOCKING
 {
     juce::ignoreUnused (midiMessages);
 

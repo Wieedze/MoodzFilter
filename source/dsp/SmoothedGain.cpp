@@ -47,7 +47,7 @@ namespace moodz::dsp
         step = (targetGain - currentGain) / static_cast<float> (rampLengthSamples);
     }
 
-    void SmoothedGain::process (std::span<const std::span<float>> channels, int numSamples) noexcept
+    void SmoothedGain::process (std::span<const std::span<float>> channels, int numSamples) noexcept MOODZ_NONBLOCKING
     {
         for (int i = 0; i < numSamples; ++i)
         {
