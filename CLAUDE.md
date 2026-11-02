@@ -67,7 +67,11 @@ ctest --test-dir Builds --output-on-failure
 ./Builds/PluginTests "[test name]"
 
 # Command line tools (ON by default, OFF in Release; -DMOODZ_BUILD_TOOLS=ON to force)
-./Builds/MoodzFilterTools --help
+./Builds/MoodzFilterTools check                                  # finite output, block size independence
+./Builds/MoodzFilterTools render Builds/renders                  # one WAV per case and signal
+./Builds/MoodzFilterTools compare Builds/renders tests/golden    # against the references (plugin ADR 0003)
+# Never refresh tests/golden/ to make compare pass: a reference changes only in a
+# separate "golden: <reason>" commit, after Maxime listened to the new renders.
 
 # Benchmarks
 ./Builds/Benchmarks
@@ -94,10 +98,12 @@ source/
   dsp/                  signal processing, static library `dsp`, never includes JUCE (CMake enforces it)
   plugin/               JUCE AudioProcessor, parameters, state (SharedCode)
   ui/                   editor (SharedCode); createEditor() lives here
-tools/                  MoodzFilterTools command line (render, check, compare, bench)
+tools/                  MoodzFilterTools command line (render, compare, check); tools/core/ has no JUCE
 tests/
   dsp/                  DspTests, no JUCE
   plugin/               PluginTests, with JUCE
+  tools/                ToolsTests: test signals and error metrics, no JUCE
+  golden/               reference renders + manifest.json (plugin ADR 0003)
 benchmarks/             Catch2 benchmarks
 cmake/                  Pamplejuce CMake modules (submodule)
 JUCE/                   JUCE 9.0.5 (submodule, pinned tag)

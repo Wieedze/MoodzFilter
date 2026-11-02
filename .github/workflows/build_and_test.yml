@@ -76,7 +76,7 @@ jobs:
         uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Configure
-        run: cmake -B ${{ env.BUILD_DIR }} -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE}} -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache ${{ matrix.extra-flags }} .
+        run: cmake -B ${{ env.BUILD_DIR }} -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE}} -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DMOODZ_BUILD_TOOLS=ON ${{ matrix.extra-flags }} .
 
       - name: Build
         run: cmake --build ${{ env.BUILD_DIR }} --config ${{ env.BUILD_TYPE }}
@@ -84,6 +84,25 @@ jobs:
       - name: Test & Benchmarks
         working-directory: ${{ env.BUILD_DIR }}
         run: ctest --verbose --output-on-failure
+
+      # Audio regression: through the real processor (task 0004, plugin ADR 0003)
+      - name: Tools check
+        run: ./${{ env.BUILD_DIR }}/MoodzFilterTools check
+
+      - name: Render
+        run: ./${{ env.BUILD_DIR }}/MoodzFilterTools render ${{ env.BUILD_DIR }}/renders
+
+      - name: Compare with the golden references
+        run: ./${{ env.BUILD_DIR }}/MoodzFilterTools compare ${{ env.BUILD_DIR }}/renders tests/golden
+
+      # The renders, to listen to them before approving a golden change
+      - name: Upload renders
+        if: ${{ always() && runner.os == 'Linux' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: renders-${{ github.sha }}
+          path: ${{ env.BUILD_DIR }}/renders/*.wav
+          if-no-files-found: ignore
 
       - name: Read in .env from CMake # see GitHubENV.cmake
         run: |
