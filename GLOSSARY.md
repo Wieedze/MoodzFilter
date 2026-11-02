@@ -22,6 +22,9 @@ Vocabulary shared between you, the agents and the code (Matt Pocock convention: 
 | **Canary** | A test program that deliberately breaks a rule (for example `RtsanCanary`, which allocates in a nonblocking function) to prove that a checker such as RealtimeSanitizer really fires; its test passes only if the checker reports the violation |
 | **Golden manifest** | `tests/golden/manifest.json`: lists every golden reference with its tolerances (max absolute error, max RMS error in dBFS); a render or reference not listed fails `compare`. Format: plugin ADR 0003 |
 | **Generic editor** | `juce::GenericAudioProcessorEditor`: the editor JUCE draws by itself, one control per parameter. The v1 interface (SPEC) |
+| **Filter model** | One filter design from sst-filters (`sst::filtersplusplus::FilterModel`: Cytomic SVF, OB-Xd 4-pole, Diode Ladder…) with its configuration (passband, slope, drive, submodel): a `FilterSetup` in `dsp/` |
+| **Passband** | What a filter lets through: low pass, high pass, band pass, notch (`sst::filtersplusplus::Passband`). The SPEC calls it the filter mode |
+| **Filter candidate** | A filter model auditioned to pick the 4 models of v1 (`dsp/FilterCandidates.h`, task 0008) |
 | **Silence floor** | Lowest value of a gain control, −60 dB internally: displayed `-inf`, gives a gain of exactly 0 (ADR 0004) |
 | **Render case** | A named parameter setup (and optional automation) that `MoodzFilterTools render` applies to every test signal; one render case × one test signal = one golden reference |
 | **Test signal** | Standardised input of a test: impulse, sine, sweep, pink noise, loop |

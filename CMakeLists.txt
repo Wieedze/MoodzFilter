@@ -117,6 +117,28 @@ pamplejuce_shared_code_defaults()
 
 
 # ---------------------------------------------------------------------------
+# sst-filters (Surge Synth Team, GPL v3, header only, no JUCE): the filter models of the
+# dsp layer. MoodzFilter ADR 0005. No release tags upstream, so commits are pinned
+# (.claude/rules/build.md). sst-basic-blocks first, so sst-filters finds its target.
+# ---------------------------------------------------------------------------
+CPMAddPackage(
+    NAME sst-basic-blocks
+    GITHUB_REPOSITORY surge-synthesizer/sst-basic-blocks
+    GIT_TAG 38cf04ae6a16994cc6c82635ce7c206f2a0ca31d
+    OPTIONS "SST_BASIC_BLOCKS_BUILD_TESTS OFF")
+CPMAddPackage(
+    NAME sst-filters
+    GITHUB_REPOSITORY surge-synthesizer/sst-filters
+    GIT_TAG 87a171bcba52c014850848a29174a54f0adc6606
+    OPTIONS "SST_FILTERS_BUILD_TESTS OFF" "SST_FILTERS_BUILD_EXAMPLES OFF")
+# Their headers are third-party: include them as system headers so that the strict
+# warnings of our dsp library (-Werror) apply to our code only
+foreach (sst_target sst-basic-blocks sst-filters)
+    get_target_property(sst_includes ${sst_target} INTERFACE_INCLUDE_DIRECTORIES)
+    set_target_properties(${sst_target} PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${sst_includes}")
+endforeach ()
+
+# ---------------------------------------------------------------------------
 # dsp: the signal processing layer. A static library that never sees JUCE
 # (.claude/rules/dsp.md), so it is testable and benchmarkable on its own.
 # ---------------------------------------------------------------------------
@@ -133,6 +155,7 @@ endforeach ()
 add_library(dsp STATIC ${DspFiles})
 target_include_directories(dsp PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/source")
 target_compile_features(dsp PUBLIC cxx_std_23)
+target_link_libraries(dsp PUBLIC sst-filters)
 set_target_properties(dsp PROPERTIES CXX_EXTENSIONS OFF POSITION_INDEPENDENT_CODE ON)
 # No fast math here: the dsp layer relies on IEEE behaviour (NaN and infinity checks)
 if (MSVC)

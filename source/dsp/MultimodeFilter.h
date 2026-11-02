@@ -1,0 +1,56 @@
+#pragma once
+
+#include "dsp/Realtime.h"
+
+#include <sst/filters++.h>
+
+#include <span>
+#include <string>
+
+namespace moodz::dsp
+{
+    // A filter model of sst-filters and its configuration (passband, slope, drive, submodel).
+    struct FilterSetup
+    {
+        sst::filtersplusplus::FilterModel model = sst::filtersplusplus::FilterModel::None;
+        sst::filtersplusplus::ModelConfig config {};
+        std::string name;
+    };
+
+    // One sst-filters model on linked stereo (the same coefficients on both channels, SPEC).
+    // Processes in internal packets of packetSize samples, kept across host blocks, so the
+    // output does not depend on how the host splits its blocks (.claude/rules/dsp.md).
+    // Cutoff and resonance are read at the start of each packet; sst-filters interpolates its
+    // coefficients across the packet.
+    class MultimodeFilter
+    {
+    public:
+        static constexpr int packetSize = 16;
+        static constexpr float minCutoffHz = 20.0f;
+        static constexpr float maxCutoffHz = 20000.0f;
+
+        // Off the audio thread. Returns false if the setup is not a valid sst-filters
+        // configuration or needs delay line memory (comb models, not supported).
+        bool configure (const FilterSetup& setup);
+
+        void prepare (double sampleRate, int maxBlockSize);
+        void reset() noexcept;
+
+        // Clamped to [minCutoffHz, min (maxCutoffHz, 0.45 * sampleRate)]; non-finite ignored.
+        void setCutoffHz (float hz) noexcept;
+        // Clamped to [0, 1]; non-finite ignored.
+        void setResonance (float amount) noexcept;
+
+        // One or two channels; with one channel, the filter runs mono.
+        void process (std::span<const std::span<float>> channels, int numSamples) noexcept MOODZ_NONBLOCKING;
+
+    private:
+        sst::filtersplusplus::Filter filter;
+        FilterSetup setup;
+        double sampleRate = 48000.0;
+        float cutoffHz = 1000.0f;
+        float resonance = 0.0f;
+        int packetPosition = 0;
+        bool ready = false;
+    };
+}
