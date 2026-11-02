@@ -46,6 +46,8 @@ The code is split into the layers of the playbook architecture: a `dsp` static l
 * [x] `MoodzFilterTools` target behind `MOODZ_BUILD_TOOLS`.
 * [x] `CLAUDE.md` build commands and repo map updated.
 * [x] Builds with no warning, `ctest` green, pluginval 10 green, CI green (run 41477871641).
-* [ ] `task-verifier`: pass.
+* [x] `task-verifier`: pass.
 
 ## End note (filled by the task-verifier)
+
+Pass on 2026-11-02 after 2 rounds. Round 1 failed on `-std=gnu++23` for `DspTests` and `MoodzFilterTools` (`cpp.md`, no compiler extensions) and a clang-format include order in `benchmarks/Catch2Main.cpp`; both fixed in `93cec1a`. Checked: Debug clean build and Release incremental build with 0 warnings, `ctest` 3/3, guard test red reproduced on the JUCE include path, configure guard fails on a JUCE include under `source/dsp/`, `MoodzFilterTools` exit codes 0 and 2, `MOODZ_BUILD_TOOLS` ON in Debug and OFF in Release, pluginval 10 `SUCCESS`, CI run 41480714455 green on Linux and Windows. Post-mortem: playbook `docs/plugins/moodzfilter/learning/0002-separate-targets.md`.
