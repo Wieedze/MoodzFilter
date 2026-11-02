@@ -6,7 +6,7 @@
 
 ## Goal
 
-CI proves on every PR that nothing on the audio path allocates, locks or makes a blocking call: `processBlock` and `dsp::SmoothedGain::process` are marked `[[clang::nonblocking]]`, a Linux job builds with RealtimeSanitizer (clang 20) and runs the tests and `MoodzFilterTools check` through them, and a canary proves the sanitizer really fires. Every target compiles as strict C++23 (no GNU extensions), including `PluginTests` and the plugin.
+CI proves on every PR that nothing on the audio path allocates, locks or makes a blocking call: `processBlock` (now also `noexcept`, `.claude/rules/cpp.md`) and `dsp::SmoothedGain::process` are marked `[[clang::nonblocking]]`, a Linux job builds with RealtimeSanitizer (clang 20) and runs the tests and `MoodzFilterTools check` through them, and a canary proves the sanitizer really fires. Every target compiles as strict C++23 (no GNU extensions), including `PluginTests` and the plugin.
 
 ## Expected behaviour (measurable)
 
@@ -32,13 +32,13 @@ CI proves on every PR that nothing on the audio path allocates, locks or makes a
 
 ## Definition of done
 
-* [ ] Canary seen red (no sanitizer: exits 0, so `WILL_FAIL` fails), then green under RTSan.
-* [ ] Annotations on `processBlock` and `SmoothedGain::process` through a single build-configuration macro.
-* [ ] Local RTSan build (clang 20): `ctest` green, `MoodzFilterTools check` exit 0, no RTSan report.
-* [ ] All targets strict C++23.
-* [ ] Normal Debug and Release builds: 0 warnings, `ctest` green, pluginval 10 green.
-* [ ] `rt-safety-reviewer` passed.
-* [ ] CI green on the three jobs.
+* [x] Canary seen red (no sanitizer: exits 0, so `WILL_FAIL` fails), then green under RTSan.
+* [x] Annotations on `processBlock` and `SmoothedGain::process` through a single build-configuration macro.
+* [x] Local RTSan build (clang 20): `ctest` green, `MoodzFilterTools check` exit 0, no RTSan report.
+* [x] All targets strict C++23 (no gnu++; JUCE wrapper objects at c++17).
+* [x] Normal Debug and Release builds: 0 warnings, `ctest` green, pluginval 10 green.
+* [x] `rt-safety-reviewer` passed (no blocking finding; canary regex and direct include applied in fa21551; two notes in FUTURE.md).
+* [x] CI green on the three jobs (run 41517663478 on fa21551: Linux, Linux RealtimeSanitizer, Windows).
 * [ ] `task-verifier`: pass.
 
 ## End note (filled by the task-verifier)
