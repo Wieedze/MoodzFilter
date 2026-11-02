@@ -110,9 +110,10 @@ TEST_CASE ("Every filter candidate is a valid configuration", "[dsp][filter]")
 
 TEST_CASE ("Every filter candidate stays finite at the bounds", "[dsp][filter]")
 {
-    // .claude/rules/dsp.md: finite output. Peak bound 16 (+36 dB over the 0.25 input) only
-    // catches a runaway: near self-oscillation the level legitimately rises (6.4 measured for
-    // the Cytomic SVF at 44.1 kHz, resonance 1).
+    // .claude/rules/dsp.md: finite output. Peak bound 4 (+24 dB over the 0.25 input) catches a
+    // runaway; the largest peak measured on this signal is 2.59 (Cytomic SVF, 96 kHz, cutoff
+    // 20 kHz, resonance 1), printed by: ./Builds/DspTests "Every filter candidate stays finite at the bounds" -s | grep "largest peak"
+    float largestPeak = 0.0f;
     for (double rate : { 44100.0, 48000.0, 96000.0, 192000.0 })
     {
         const auto input = noise (static_cast<int> (rate / 2), 7u);
@@ -138,11 +139,13 @@ TEST_CASE ("Every filter candidate stays finite at the bounds", "[dsp][filter]")
                         peak = std::max (peak, std::abs (s));
                     }
                     REQUIRE (finite);
-                    CHECK (peak < 16.0f);
+                    CHECK (peak < 4.0f);
+                    largestPeak = std::max (largestPeak, peak);
                 }
             }
         }
     }
+    SUCCEED ("largest peak " << largestPeak);
 }
 
 TEST_CASE ("MultimodeFilter stays finite when the sample rate drops", "[dsp][filter]")
