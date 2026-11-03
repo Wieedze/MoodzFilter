@@ -13,6 +13,7 @@
 
 using moodz::dsp::FilterSetup;
 using moodz::dsp::filterSetups;
+using moodz::dsp::filterVariants;
 using moodz::dsp::MultimodeFilter;
 namespace sfpp = sst::filtersplusplus;
 
@@ -108,39 +109,44 @@ TEST_CASE ("Every filter setup is a valid configuration", "[dsp][filter]")
     }
 }
 
-TEST_CASE ("Every filter setup stays finite at the bounds", "[dsp][filter]")
+TEST_CASE ("Every filter variant stays finite at the bounds", "[dsp][filter]")
 {
     // .claude/rules/dsp.md: finite output. Peak bound 4 (+24 dB over the 0.25 input) catches a
-    // runaway; the largest peak measured on this signal is 2.59 (Cytomic SVF, 96 kHz, cutoff
-    // 20 kHz, resonance 1), printed by: ./Builds/DspTests "Every filter setup stays finite at the bounds" -s | grep "largest peak"
+    // runaway (task 0007). Extra value at both ends: OB-Xd Morph 6 and 24 dB, K35 saturation 0
+    // and 100 %. Largest peak measured on this signal: 2.94; printed by:
+    // ./Builds/DspTests "Every filter variant stays finite at the bounds" -s | grep "largest peak"
     float largestPeak = 0.0f;
     for (double rate : { 44100.0, 48000.0, 96000.0, 192000.0 })
     {
         const auto input = noise (static_cast<int> (rate / 2), 7u);
-        for (const auto& setup : filterSetups())
+        for (const auto& setup : filterVariants())
         {
             for (float cutoff : { 20.0f, 1000.0f, 20000.0f })
             {
                 for (float resonance : { 0.0f, 0.5f, 1.0f })
                 {
-                    INFO (setup.name << " at " << rate << " Hz, cutoff " << cutoff << ", resonance " << resonance);
-                    MultimodeFilter filter;
-                    REQUIRE (filter.configure (setup));
-                    filter.prepare (rate, 512);
-                    filter.setCutoffHz (cutoff);
-                    filter.setResonance (resonance);
-                    auto output = input;
-                    processMono (filter, output);
-                    float peak = 0.0f;
-                    bool finite = true;
-                    for (auto s : output)
+                    for (float extra : { 0.0f, 1.0f })
                     {
-                        finite = finite && std::isfinite (s);
-                        peak = std::max (peak, std::abs (s));
+                        INFO (setup.name << " at " << rate << " Hz, cutoff " << cutoff << ", resonance " << resonance << ", extra " << extra);
+                        MultimodeFilter filter;
+                        REQUIRE (filter.configure (setup));
+                        filter.prepare (rate, 512);
+                        filter.setCutoffHz (cutoff);
+                        filter.setResonance (resonance);
+                        filter.setExtra (extra);
+                        auto output = input;
+                        processMono (filter, output);
+                        float peak = 0.0f;
+                        bool finite = true;
+                        for (auto s : output)
+                        {
+                            finite = finite && std::isfinite (s);
+                            peak = std::max (peak, std::abs (s));
+                        }
+                        REQUIRE (finite);
+                        CHECK (peak < 4.0f);
+                        largestPeak = std::max (largestPeak, peak);
                     }
-                    REQUIRE (finite);
-                    CHECK (peak < 4.0f);
-                    largestPeak = std::max (largestPeak, peak);
                 }
             }
         }
@@ -153,7 +159,7 @@ TEST_CASE ("MultimodeFilter stays finite when the sample rate drops", "[dsp][fil
     // rt-safety review of task 0007: a cutoff set at 48 kHz must not exceed Nyquist after
     // prepare() at a lower rate (OB-Xd models computed tan(pi * f / sr) past pi / 2)
     const auto input = noise (32000, 13u);
-    for (const auto& setup : filterSetups())
+    for (const auto& setup : filterVariants())
     {
         INFO (setup.name);
         MultimodeFilter filter;
@@ -176,7 +182,7 @@ TEST_CASE ("MultimodeFilter does not depend on the block size", "[dsp][filter]")
     const auto input = noise (8192, 11u);
     const int total = static_cast<int> (input.size());
 
-    for (const auto& setup : filterSetups())
+    for (const auto& setup : filterVariants())
     {
         auto render = [&] (int blockSize) {
             auto filter = preparedFilter (setup, 300.0f, 0.7f);
@@ -210,7 +216,7 @@ TEST_CASE ("MultimodeFilter does not depend on the block size", "[dsp][filter]")
 TEST_CASE ("MultimodeFilter reset clears the state", "[dsp][filter]")
 {
     const auto input = noise (4096, 3u);
-    for (const auto& setup : filterSetups())
+    for (const auto& setup : filterVariants())
     {
         INFO (setup.name);
         auto filter = preparedFilter (setup, 800.0f, 0.6f);
@@ -226,7 +232,7 @@ TEST_CASE ("MultimodeFilter reset clears the state", "[dsp][filter]")
 TEST_CASE ("MultimodeFilter reset in the middle of a packet clears the state", "[dsp][filter]")
 {
     const auto input = noise (4096, 17u);
-    for (const auto& setup : filterSetups())
+    for (const auto& setup : filterVariants())
     {
         INFO (setup.name);
         auto used = preparedFilter (setup, 800.0f, 0.6f);
@@ -271,7 +277,7 @@ TEST_CASE ("MultimodeFilter handles a block of 0 samples", "[dsp][filter]")
 
 TEST_CASE ("MultimodeFilter processes linked channels identically", "[dsp][filter]")
 {
-    for (const auto& setup : filterSetups())
+    for (const auto& setup : filterVariants())
     {
         INFO (setup.name);
         auto filter = preparedFilter (setup, 1500.0f, 0.5f);

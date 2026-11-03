@@ -46,6 +46,10 @@ namespace moodz::dsp
         void setCutoffHz (float hz) noexcept MOODZ_NONBLOCKING;
         // Clamped to [0, 1]; non-finite ignored.
         void setResonance (float amount) noexcept MOODZ_NONBLOCKING;
+        // The model's continuous setting, 0..1: OB-Xd 4-pole Morph, K35 continuous saturation
+        // (sst-filters `extra` coefficient argument); ignored by other models. Clamped to [0, 1];
+        // non-finite ignored.
+        void setExtra (float amount) noexcept MOODZ_NONBLOCKING;
 
         // One or two channels; with one channel, the filter runs mono. Processes at most as many
         // samples as the shortest channel span holds.
@@ -58,6 +62,7 @@ namespace moodz::dsp
         float cutoffHz = 1000.0f;
         float nyquistGuardHz = 21600.0f; // 0.45 * sampleRate
         float resonance = 0.0f;
+        float extra = 0.0f;
         int packetPosition = 0;
         bool ready = false;
     };

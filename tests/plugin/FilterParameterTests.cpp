@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <numbers>
 #include <vector>
 
@@ -110,10 +111,15 @@ TEST_CASE ("The plugin filters with the selected model", "[plugin][filter]")
     CHECK (pluginGainDb (processor, 100.0) == Catch::Approx (0.0).margin (1.0));
 }
 
-TEST_CASE ("Switching the model on every block stays finite", "[plugin][filter]")
+TEST_CASE ("Switching the model and its settings on every block stays finite", "[plugin][filter]")
 {
+    // Every Model entry, Slope 6 to 24 dB in 3 dB steps (every Diode step and Morph values between),
+    // K35 saturation 0 to 100 %, every Vintage variant, changed on every block
     PluginProcessor processor;
     auto& model = parameter<juce::AudioParameterChoice> (processor, "filterModel");
+    auto& slope = parameter<juce::AudioParameterFloat> (processor, "slope");
+    auto& saturation = parameter<juce::AudioParameterFloat> (processor, "k35Saturation");
+    auto& variant = parameter<juce::AudioParameterChoice> (processor, "vintageVariant");
     parameter<juce::AudioParameterFloat> (processor, "resonance") = 100.0f;
     processor.prepareToPlay (48000.0, 256);
 
@@ -123,6 +129,9 @@ TEST_CASE ("Switching the model on every block stays finite", "[plugin][filter]"
     for (int block = 0; block < 375; ++block) // 2 s at 48 kHz
     {
         model = block % 9;
+        slope = 6.0f + static_cast<float> (block % 7) * 3.0f;
+        saturation = static_cast<float> (block % 5) * 25.0f;
+        variant = block % 6;
         for (int channel = 0; channel < 2; ++channel)
             for (int i = 0; i < 256; ++i)
                 buffer.setSample (channel, i, 0.25f * (random.nextFloat() * 2.0f - 1.0f));
@@ -172,12 +181,16 @@ TEST_CASE ("The snapshot always gives a valid model index", "[plugin][filter]")
 TEST_CASE ("Parameter versions follow the order of addition", "[plugin][parameters]")
 {
     // .claude/rules/juce.md: gainOut shipped in version 1 (task 0003); the filter parameters
-    // were added in version 2 (task 0008). A version hint never changes once set.
+    // were added in version 2 (task 0008), the per-model settings in version 3 (task 0010).
+    // A version hint never changes once set.
     PluginProcessor processor;
     CHECK (parameter<juce::AudioParameterFloat> (processor, "gainOut").getVersionHint() == 1);
     CHECK (parameter<juce::AudioParameterChoice> (processor, "filterModel").getVersionHint() == 2);
     CHECK (parameter<juce::AudioParameterFloat> (processor, "cutoff").getVersionHint() == 2);
     CHECK (parameter<juce::AudioParameterFloat> (processor, "resonance").getVersionHint() == 2);
+    CHECK (parameter<juce::AudioParameterFloat> (processor, "slope").getVersionHint() == 3);
+    CHECK (parameter<juce::AudioParameterFloat> (processor, "k35Saturation").getVersionHint() == 3);
+    CHECK (parameter<juce::AudioParameterChoice> (processor, "vintageVariant").getVersionHint() == 3);
 }
 
 namespace
@@ -317,4 +330,178 @@ TEST_CASE ("A state with the removed filterMode parameter loads", "[plugin][stat
     PluginProcessor processor;
     processor.setStateInformation (block.getData(), static_cast<int> (block.getSize()));
     checkLoadedValues (processor);
+}
+
+TEST_CASE ("The per-model settings match ADR 0008", "[plugin][filter]")
+{
+    PluginProcessor processor;
+    auto& slope = parameter<juce::AudioParameterFloat> (processor, "slope");
+    CHECK (slope.range.start == Catch::Approx (6.0f));
+    CHECK (slope.range.end == Catch::Approx (24.0f));
+    CHECK (slope.get() == Catch::Approx (24.0f));
+    CHECK (textAt (slope, 24.0f) == "24 dB/oct");
+    CHECK (textAt (slope, 12.5f) == "12.5 dB/oct");
+
+    auto& saturation = parameter<juce::AudioParameterFloat> (processor, "k35Saturation");
+    CHECK (saturation.range.start == Catch::Approx (0.0f));
+    CHECK (saturation.range.end == Catch::Approx (100.0f));
+    CHECK (saturation.get() == Catch::Approx (25.0f));
+
+    auto& variant = parameter<juce::AudioParameterChoice> (processor, "vintageVariant");
+    CHECK (variant.choices
+           == juce::StringArray { "Runge-Kutta",
+               "Runge-Kutta compensated",
+               "Huovilainen",
+               "Huovilainen compensated",
+               "Huovilainen 2010",
+               "Huovilainen 2010 compensated" });
+    CHECK (variant.getIndex() == 1);
+}
+
+TEST_CASE ("The snapshot carries the per-model settings", "[plugin][filter]")
+{
+    // The filter takes the K35 saturation as 0..1, from the 0..100 % parameter
+    LayoutOnlyProcessor owner;
+    juce::AudioProcessorValueTreeState state { owner, nullptr, "MoodzFilter", moodz::parameters::createLayout() };
+    const moodz::parameters::Snapshotter snapshotter { state };
+    auto set = [&] (const char* id, float value) {
+        auto* p = state.getParameter (id);
+        p->setValueNotifyingHost (p->convertTo0to1 (value));
+    };
+
+    set ("slope", 15.0f);
+    set ("k35Saturation", 70.0f);
+    set ("vintageVariant", 4.0f);
+    const auto params = snapshotter.snapshot();
+    CHECK (params.slopeDb == Catch::Approx (15.0f).margin (0.01));
+    CHECK (params.k35Saturation == Catch::Approx (0.7f).margin (1e-4));
+    CHECK (params.vintageVariant == 4);
+}
+
+TEST_CASE ("The snapshot always gives a valid Vintage variant index", "[plugin][filter]")
+{
+    using moodz::parameters::toVintageVariantIndex;
+    CHECK (toVintageVariantIndex (0.0f) == 0);
+    CHECK (toVintageVariantIndex (5.0f) == 5);
+    CHECK (toVintageVariantIndex (6.0f) == 5);
+    CHECK (toVintageVariantIndex (-1.0f) == 0);
+    CHECK (toVintageVariantIndex (std::numeric_limits<float>::quiet_NaN()) == 0);
+    CHECK (toVintageVariantIndex (std::numeric_limits<float>::infinity()) == 0);
+}
+
+namespace
+{
+    constexpr int obxd = 5, diodeLadder = 6, k35LowPass = 7;
+
+    // Bounds set from the measurements printed by the tests below (commands in each test)
+    // Diode Ladder at 4 kHz: -30.8, -41.8, -54.4, -66.8 dB for 6, 12, 18, 24 dB, smallest step 11.0 dB
+    constexpr double minimumStepDb = 8.0;
+    // OB-Xd at 4 kHz: -16.9, -29.4, -34.7, -41.9, -54.4 dB for 6, 12, 15, 18, 24 dB, smallest gap 5.3 dB
+    constexpr double minimumMorphStepDb = 3.0;
+    // K35 third harmonic: -55.9 dB at 0 %, -9.3 dB at 100 %, a rise of 46.6 dB
+    constexpr double minimumHarmonicRiseDb = 30.0;
+
+    double gainAtSlope (int model, float slopeDb, double frequency)
+    {
+        PluginProcessor processor;
+        withFilter (processor, model);
+        parameter<juce::AudioParameterFloat> (processor, "slope") = slopeDb;
+        return pluginGainDb (processor, frequency);
+    }
+}
+
+TEST_CASE ("Slope steepens the Diode Ladder step by step", "[plugin][filter]")
+{
+    // Sine at 4 kHz, two octaves above the 1 kHz cutoff: each 6 dB step attenuates more.
+    // Gains printed by: ./Builds/PluginTests "Slope steepens the Diode Ladder step by step" -s | grep "Diode slope"
+    const std::array<float, 4> slopes { 6.0f, 12.0f, 18.0f, 24.0f };
+    std::array<double, 4> gains {};
+    for (size_t i = 0; i < slopes.size(); ++i)
+    {
+        gains[i] = gainAtSlope (diodeLadder, slopes[i], 4000.0);
+        SUCCEED ("Diode slope " << slopes[i] << " dB: " << gains[i] << " dB at 4 kHz");
+    }
+    for (size_t i = 1; i < gains.size(); ++i)
+        CHECK (gains[i - 1] - gains[i] > minimumStepDb);
+    // Between steps, the nearest one plays: 13 dB sounds like 12 dB
+    CHECK (gainAtSlope (diodeLadder, 13.0f, 4000.0) == Catch::Approx (gains[1]).margin (0.01));
+}
+
+TEST_CASE ("Slope morphs the OB-Xd 4-pole continuously", "[plugin][filter]")
+{
+    // Sine at 4 kHz, two octaves above the 1 kHz cutoff: attenuation grows with the slope, and a
+    // slope between two steps sits between them.
+    // Gains printed by: ./Builds/PluginTests "Slope morphs the OB-Xd 4-pole continuously" -s | grep "OB-Xd slope"
+    const std::array<float, 5> slopes { 6.0f, 12.0f, 15.0f, 18.0f, 24.0f };
+    std::array<double, 5> gains {};
+    for (size_t i = 0; i < slopes.size(); ++i)
+    {
+        gains[i] = gainAtSlope (obxd, slopes[i], 4000.0);
+        SUCCEED ("OB-Xd slope " << slopes[i] << " dB: " << gains[i] << " dB at 4 kHz");
+    }
+    for (size_t i = 1; i < gains.size(); ++i)
+        CHECK (gains[i - 1] - gains[i] > minimumMorphStepDb);
+}
+
+namespace
+{
+    // Level in dB (re full scale) of one frequency in the second half of the output, single DFT bin
+    double harmonicLevelDb (PluginProcessor& processor, double fundamental, double frequency)
+    {
+        constexpr int blockSize = 512;
+        constexpr int length = 48128; // 94 blocks of 512, about 1 s
+        processor.prepareToPlay (48000.0, blockSize);
+        juce::AudioBuffer<float> buffer (2, blockSize);
+        juce::MidiBuffer midi;
+        double re = 0.0, im = 0.0;
+        int count = 0;
+        for (int start = 0; start + blockSize <= length; start += blockSize)
+        {
+            for (int channel = 0; channel < 2; ++channel)
+                for (int i = 0; i < blockSize; ++i)
+                    buffer.setSample (channel, i, static_cast<float> (std::sin (2.0 * std::numbers::pi * fundamental * (start + i) / 48000.0)));
+            processor.processBlock (buffer, midi);
+            for (int i = 0; i < blockSize; ++i)
+                if (const int n = start + i; n >= length / 2)
+                {
+                    const double phase = 2.0 * std::numbers::pi * frequency * n / 48000.0;
+                    re += buffer.getSample (0, i) * std::cos (phase);
+                    im += buffer.getSample (0, i) * std::sin (phase);
+                    ++count;
+                }
+        }
+        return 20.0 * std::log10 (2.0 * std::sqrt (re * re + im * im) / count + 1e-12);
+    }
+}
+
+TEST_CASE ("K35 saturation adds harmonics", "[plugin][filter]")
+{
+    // K35 Low-pass, cutoff 1 kHz, resonance 50 %, sine at 200 Hz, 0 dBFS: the tanh stage
+    // (sst-filters K35Filter.h) adds odd harmonics. Third harmonic (600 Hz) at 0 and 100 %
+    // printed by: ./Builds/PluginTests "K35 saturation adds harmonics" -s | grep "third harmonic"
+    auto thirdHarmonic = [] (float saturation) {
+        PluginProcessor processor;
+        withFilter (processor, k35LowPass);
+        parameter<juce::AudioParameterFloat> (processor, "resonance") = 50.0f;
+        parameter<juce::AudioParameterFloat> (processor, "k35Saturation") = saturation;
+        return harmonicLevelDb (processor, 200.0, 600.0);
+    };
+    const auto clean = thirdHarmonic (0.0f), driven = thirdHarmonic (100.0f);
+    SUCCEED ("third harmonic at 0 %: " << clean << " dB, at 100 %: " << driven << " dB");
+    CHECK (driven - clean > minimumHarmonicRiseDb);
+}
+
+TEST_CASE ("A state saved by task 0009 loads with the default settings", "[plugin][state]")
+{
+    // Task 0009 saved gainOut, filterModel, cutoff, resonance: the settings take their defaults
+    const auto block = stateWith ({ { "gainOut", -3.0 }, { "filterModel", 3.0 }, { "cutoff", 5000.0 }, { "resonance", 60.0 } });
+    PluginProcessor processor;
+    parameter<juce::AudioParameterFloat> (processor, "slope") = 6.0f;
+    parameter<juce::AudioParameterFloat> (processor, "k35Saturation") = 90.0f;
+    parameter<juce::AudioParameterChoice> (processor, "vintageVariant") = 3;
+    processor.setStateInformation (block.getData(), static_cast<int> (block.getSize()));
+    checkLoadedValues (processor);
+    CHECK (parameter<juce::AudioParameterFloat> (processor, "slope").get() == Catch::Approx (24.0f).margin (0.01));
+    CHECK (parameter<juce::AudioParameterFloat> (processor, "k35Saturation").get() == Catch::Approx (25.0f).margin (0.01));
+    CHECK (parameter<juce::AudioParameterChoice> (processor, "vintageVariant").getIndex() == 1);
 }

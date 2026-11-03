@@ -13,12 +13,16 @@ namespace moodz::parameters
         inline constexpr const char* filterModel = "filterModel";
         inline constexpr const char* cutoff = "cutoff";
         inline constexpr const char* resonance = "resonance";
+        inline constexpr const char* slope = "slope";
+        inline constexpr const char* k35Saturation = "k35Saturation";
+        inline constexpr const char* vintageVariant = "vintageVariant";
     }
 
     // Parameter version passed to juce::ParameterID, incremented with every addition:
-    // 1 = gainOut (task 0003), 2 = filterModel, cutoff, resonance (task 0008).
+    // 1 = gainOut (task 0003), 2 = filterModel, cutoff, resonance (task 0008),
+    // 3 = slope, k35Saturation, vintageVariant (task 0010).
     // A parameter keeps the version it was added with.
-    inline constexpr int version = 2;
+    inline constexpr int version = 3;
 
     juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
 
@@ -30,11 +34,16 @@ namespace moodz::parameters
     juce::String hertzToText (float hz);
     float textToHertz (const juce::String& text);
 
+    // Display of the slope: "24 dB/oct", "12.5 dB/oct"
+    juce::String slopeToText (float db);
+
     static_assert (std::atomic<float>::is_always_lock_free, "the audio thread reads parameters through std::atomic<float>");
 
     // Model index from the raw choice value, always within the filter list: NaN, infinity
     // and out-of-range values are bounded in float before the conversion to int.
     int toModelIndex (float rawValue) noexcept;
+    // Same for the Vintage variant list
+    int toVintageVariantIndex (float rawValue) noexcept;
 
     // Plain copy of the parameter values, taken at the start of each block.
     // The dsp layer reads only this, never the APVTS.
@@ -44,6 +53,9 @@ namespace moodz::parameters
         int filterModel = 0;
         float cutoffHz = 1000.0f;
         float resonance = 0.2f; // 0..1, from the 0..100 % parameter
+        float slopeDb = 24.0f;
+        float k35Saturation = 0.25f; // 0..1, from the 0..100 % parameter
+        int vintageVariant = 1;
     };
 
     // Raw atomic values, looked up once so that a snapshot needs no string lookup.
@@ -58,5 +70,8 @@ namespace moodz::parameters
         const std::atomic<float>* filterModel;
         const std::atomic<float>* cutoff;
         const std::atomic<float>* resonance;
+        const std::atomic<float>* slope;
+        const std::atomic<float>* k35Saturation;
+        const std::atomic<float>* vintageVariant;
     };
 }
