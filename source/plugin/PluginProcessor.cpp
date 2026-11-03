@@ -11,12 +11,12 @@ PluginProcessor::PluginProcessor()
                      #endif
                        )
 {
-    // Off the audio thread: configure every candidate once (sst-filters' prepareInstance
+    // Off the audio thread: configure every filter setup once (sst-filters' prepareInstance
     // allocates on first use)
-    const auto candidates = moodz::dsp::filterCandidates();
+    const auto setups = moodz::dsp::filterSetups();
     for (size_t i = 0; i < filters.size(); ++i)
     {
-        [[maybe_unused]] const bool valid = filters[i].configure (candidates[i]);
+        [[maybe_unused]] const bool valid = filters[i].configure (setups[i]);
         jassert (valid);
     }
 }
@@ -106,7 +106,7 @@ void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
         filter.setCutoffHz (params.cutoffHz);
         filter.setResonance (params.resonance);
     }
-    currentFilter = std::clamp (params.filterModel, 0, static_cast<int> (filters.size()) - 1);
+    currentFilter = moodz::dsp::filterSetupIndex (params.filterModel, params.filterMode);
 }
 
 void PluginProcessor::releaseResources()
@@ -164,15 +164,16 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     const auto params = snapshotter.snapshot();
     gainOut.setTargetDb (params.gainOutDb);
 
-    // A newly selected model starts from a clean state (no crossfade yet: a click is possible,
-    // task 0008 out of scope)
-    const auto selected = std::clamp (params.filterModel, 0, static_cast<int> (filters.size()) - 1);
+    // A newly selected filter starts from a clean state (no crossfade yet: a click is possible,
+    // tasks 0008 and 0009 out of scope). A mode the model lacks maps to its low pass, so it
+    // keeps the same filter and its state (ADR 0006).
+    const auto selected = moodz::dsp::filterSetupIndex (params.filterModel, params.filterMode);
     if (selected != currentFilter)
     {
-        filters[static_cast<size_t> (selected)].reset();
+        filters[selected].reset();
         currentFilter = selected;
     }
-    auto& filter = filters[static_cast<size_t> (currentFilter)];
+    auto& filter = filters[currentFilter];
     filter.setCutoffHz (params.cutoffHz);
     filter.setResonance (params.resonance);
 

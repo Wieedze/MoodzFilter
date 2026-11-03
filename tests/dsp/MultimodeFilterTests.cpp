@@ -1,4 +1,4 @@
-#include "dsp/FilterCandidates.h"
+#include "dsp/FilterModels.h"
 #include "dsp/MultimodeFilter.h"
 
 #include <catch2/catch_approx.hpp>
@@ -11,7 +11,7 @@
 #include <numbers>
 #include <vector>
 
-using moodz::dsp::filterCandidates;
+using moodz::dsp::filterSetups;
 using moodz::dsp::FilterSetup;
 using moodz::dsp::MultimodeFilter;
 namespace sfpp = sst::filtersplusplus;
@@ -98,9 +98,9 @@ TEST_CASE ("MultimodeFilter high pass response", "[dsp][filter]")
     CHECK (below > -46.0);
 }
 
-TEST_CASE ("Every filter candidate is a valid configuration", "[dsp][filter]")
+TEST_CASE ("Every filter setup is a valid configuration", "[dsp][filter]")
 {
-    for (const auto& candidate : filterCandidates())
+    for (const auto& candidate : filterSetups())
     {
         INFO (candidate.name);
         MultimodeFilter filter;
@@ -108,16 +108,16 @@ TEST_CASE ("Every filter candidate is a valid configuration", "[dsp][filter]")
     }
 }
 
-TEST_CASE ("Every filter candidate stays finite at the bounds", "[dsp][filter]")
+TEST_CASE ("Every filter setup stays finite at the bounds", "[dsp][filter]")
 {
     // .claude/rules/dsp.md: finite output. Peak bound 4 (+24 dB over the 0.25 input) catches a
     // runaway; the largest peak measured on this signal is 2.59 (Cytomic SVF, 96 kHz, cutoff
-    // 20 kHz, resonance 1), printed by: ./Builds/DspTests "Every filter candidate stays finite at the bounds" -s | grep "largest peak"
+    // 20 kHz, resonance 1), printed by: ./Builds/DspTests "Every filter setup stays finite at the bounds" -s | grep "largest peak"
     float largestPeak = 0.0f;
     for (double rate : { 44100.0, 48000.0, 96000.0, 192000.0 })
     {
         const auto input = noise (static_cast<int> (rate / 2), 7u);
-        for (const auto& candidate : filterCandidates())
+        for (const auto& candidate : filterSetups())
         {
             for (float cutoff : { 20.0f, 1000.0f, 20000.0f })
             {
@@ -153,7 +153,7 @@ TEST_CASE ("MultimodeFilter stays finite when the sample rate drops", "[dsp][fil
     // rt-safety review of task 0007: a cutoff set at 48 kHz must not exceed Nyquist after
     // prepare() at a lower rate (OB-Xd models computed tan(pi * f / sr) past pi / 2)
     const auto input = noise (32000, 13u);
-    for (const auto& candidate : filterCandidates())
+    for (const auto& candidate : filterSetups())
     {
         INFO (candidate.name);
         MultimodeFilter filter;
@@ -176,7 +176,7 @@ TEST_CASE ("MultimodeFilter does not depend on the block size", "[dsp][filter]")
     const auto input = noise (8192, 11u);
     const int total = static_cast<int> (input.size());
 
-    for (const auto& candidate : filterCandidates())
+    for (const auto& candidate : filterSetups())
     {
         auto render = [&] (int blockSize) {
             auto filter = preparedFilter (candidate, 300.0f, 0.7f);
@@ -210,7 +210,7 @@ TEST_CASE ("MultimodeFilter does not depend on the block size", "[dsp][filter]")
 TEST_CASE ("MultimodeFilter reset clears the state", "[dsp][filter]")
 {
     const auto input = noise (4096, 3u);
-    for (const auto& candidate : filterCandidates())
+    for (const auto& candidate : filterSetups())
     {
         INFO (candidate.name);
         auto filter = preparedFilter (candidate, 800.0f, 0.6f);
@@ -226,7 +226,7 @@ TEST_CASE ("MultimodeFilter reset clears the state", "[dsp][filter]")
 TEST_CASE ("MultimodeFilter reset in the middle of a packet clears the state", "[dsp][filter]")
 {
     const auto input = noise (4096, 17u);
-    for (const auto& candidate : filterCandidates())
+    for (const auto& candidate : filterSetups())
     {
         INFO (candidate.name);
         auto used = preparedFilter (candidate, 800.0f, 0.6f);
@@ -271,7 +271,7 @@ TEST_CASE ("MultimodeFilter handles a block of 0 samples", "[dsp][filter]")
 
 TEST_CASE ("MultimodeFilter processes linked channels identically", "[dsp][filter]")
 {
-    for (const auto& candidate : filterCandidates())
+    for (const auto& candidate : filterSetups())
     {
         INFO (candidate.name);
         auto filter = preparedFilter (candidate, 1500.0f, 0.5f);
@@ -280,5 +280,32 @@ TEST_CASE ("MultimodeFilter processes linked channels identically", "[dsp][filte
         const std::array<std::span<float>, 2> channels { std::span<float> { left }, std::span<float> { right } };
         filter.process (channels, 2048);
         REQUIRE (left == right);
+    }
+}
+
+TEST_CASE ("The filter setups are the supported model and passband pairs", "[dsp][filter]")
+{
+    // ADR 0006: Cytomic SVF plays 4 passbands, K35 low and high pass, the others low pass only;
+    // passbands listed with Filter::availableModelConfigurations at sst-filters 87a171b
+    using sfpp::FilterModel;
+    using sfpp::Passband;
+    const std::array<std::pair<FilterModel, Passband>, 9> expected { {
+        { FilterModel::CytomicSVF, Passband::LP },
+        { FilterModel::CytomicSVF, Passband::HP },
+        { FilterModel::CytomicSVF, Passband::BP },
+        { FilterModel::CytomicSVF, Passband::Notch },
+        { FilterModel::VintageLadder, Passband::LP },
+        { FilterModel::OBXD_4Pole, Passband::LP },
+        { FilterModel::DiodeLadder, Passband::LP },
+        { FilterModel::K35, Passband::LP },
+        { FilterModel::K35, Passband::HP },
+    } };
+    const auto setups = filterSetups();
+    REQUIRE (setups.size() == expected.size());
+    for (size_t i = 0; i < setups.size(); ++i)
+    {
+        INFO (setups[i].name);
+        CHECK (setups[i].model == expected[i].first);
+        CHECK (setups[i].config.pt == expected[i].second);
     }
 }

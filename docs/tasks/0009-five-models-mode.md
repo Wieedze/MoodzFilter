@@ -18,16 +18,16 @@ Unless stated, the signal is a sine at −12 dBFS, 48 kHz, blocks of 512, cutoff
 | `filterModel` | choices `Cytomic SVF`, `Vintage Ladder`, `OB-Xd 4-pole`, `Diode Ladder`, `K35`, in this order; default index 0 | exact | ADR 0006 |
 | `filterMode` | choices `Low-pass`, `High-pass`, `Band-pass`, `Notch`, in this order; default `Low-pass` | exact | SPEC, ADR 0006 |
 | Version hints | `gainOut` 1; `filterModel`, `cutoff`, `resonance` 2; `filterMode` 3 | exact | `.claude/rules/juce.md` |
-| Model index from the raw value | NaN, ±∞, −1, 99 give an index in 0..4 | exact | task 0008 invariant, list now 5 long |
+| Model and mode indices from the raw value | NaN, ±∞, −1, 99 give a model index in 0..4 and a mode index in 0..3 | exact | task 0008 invariant, list now 5 long |
 | Cytomic SVF, Low-pass, 10 kHz then 100 Hz | −34 to −46 dB, then 0 ± 1 dB | as stated | task 0008 test (unchanged) |
 | Cytomic SVF, High-pass, 100 Hz then 10 kHz | −34 to −46 dB, then 0 ± 1 dB | as stated | task 0007 measurement (HP 100 Hz −40.1 dB) |
-| Cytomic SVF, Band-pass, 100 Hz, 1 kHz, 10 kHz | 100 Hz and 10 kHz each below the 1 kHz gain | measured margin | SVF band-pass |
-| Cytomic SVF, Notch, 100 Hz, 1 kHz, 10 kHz | 1 kHz below both 100 Hz and 10 kHz | measured margin | SVF notch |
-| K35, High-pass, 100 Hz then 10 kHz | 100 Hz below 10 kHz | measured margin | K35 high-pass |
-| Fallback: Vintage Ladder, OB-Xd 4-pole, Diode Ladder with High-pass, Band-pass, Notch; K35 with Band-pass, Notch; 1 s of pink noise | output equal to the same model in Low-pass | max abs difference ≤ 1e-6 | ADR 0006 |
+| Cytomic SVF, Band-pass, 100 Hz, 1 kHz, 10 kHz | 1 kHz more than 12 dB over 100 Hz and over 10 kHz | measured 14.1 and 15.4 dB: `./Builds/PluginTests "Cytomic SVF band pass and notch" -s \| grep -E "band pass\|notch 1"` | SVF band-pass |
+| Cytomic SVF, Notch, 100 Hz, 1 kHz, 10 kHz | 1 kHz more than 60 dB under 100 Hz and under 10 kHz | measured −122.5 dB at 1 kHz, −0.18 and −0.13 dB either side: same command | SVF notch |
+| K35, High-pass, 100 Hz then 10 kHz | 10 kHz more than 16 dB over 100 Hz | measured 20.1 dB: `./Builds/PluginTests "K35 high pass" -s \| grep "K35 high pass 100"` | K35 high-pass |
+| Fallback: Vintage Ladder, OB-Xd 4-pole, Diode Ladder with High-pass, Band-pass, Notch; K35 with Band-pass, Notch; 1 s of white noise (`juce::Random` seed 7, peak 0.25) | output equal to the same model in Low-pass | max abs difference ≤ 1e-6 | ADR 0006 |
 | Model and Mode changed on every block, all 20 pairs, 2 s of noise | every sample finite; RTSan build: no report | exact | `.claude/rules/realtime-audio.md` |
 | State saved by task 0008 (`gainOut`, `filterModel`, `cutoff`, `resonance`) | loads; `filterMode` at `Low-pass`, the other values kept | exact | `.claude/rules/juce.md` (fallback) |
-| Every model × supported passband, at the parameter bounds (cutoff 20 Hz and 20 kHz, resonance 0 and 1, 44.1 and 96 kHz) | finite output, peak within the task 0007 bound of 4 | as stated | task 0007 test, extended |
+| Every model × supported passband (9 filter setups), noise, at 44.1, 48, 96, 192 kHz, cutoff 20 Hz, 1 kHz, 20 kHz, resonance 0, 0.5, 1 | finite output, peak under the task 0007 bound of 4 | measured largest peak 2.59: `./Builds/DspTests "Every filter setup stays finite at the bounds" -s \| grep "largest peak"` | task 0007 test, extended |
 | `check`, `render`, `compare` | render cases unchanged (default model and Mode, filter wide open): `compare` green against the current references, no `golden:` commit | manifest tolerances | ADR 0003 |
 
 ## Out of scope
@@ -44,7 +44,7 @@ Unless stated, the signal is a sine at −12 dBFS, 48 kHz, blocks of 512, cutoff
 
 * `dsp/FilterModels.h` replaces `dsp/FilterCandidates.h`: the v1 list of ADR 0006, each model with the passbands it supports. "Filter candidate" leaves the code; `GLOSSARY.md` is updated in this task.
 * One `MultimodeFilter` per (model, supported passband) pair, configured in the constructor and prepared in `prepareToPlay`, as in task 0008: 4 + 1 + 1 + 1 + 2 = 9 instances. `processBlock` maps (Model, Mode) to an instance, with the fallback applied in that mapping, and resets the instance when the pair changes. No `configure` or `prepareInstance` on the audio thread.
-* The fallback is a mapping in the snapshot or the processor, not a DSP behaviour; it is tested through `PluginProcessor`.
+* The fallback is a table next to the model list (`dsp::filterSetupIndex`), not a DSP behaviour; it is tested through `PluginProcessor`.
 
 ## Rules to load
 

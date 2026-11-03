@@ -24,7 +24,10 @@ Vocabulary shared between you, the agents and the code (Matt Pocock convention: 
 | **Generic editor** | `juce::GenericAudioProcessorEditor`: the editor JUCE draws by itself, one control per parameter. The v1 interface (SPEC) |
 | **Filter model** | One filter design from sst-filters (`sst::filtersplusplus::FilterModel`: Cytomic SVF, OB-Xd 4-pole, Diode Ladder…) with its configuration (passband, slope, drive, submodel): a `FilterSetup` in `dsp/` |
 | **Passband** | What a filter lets through: low pass, high pass, band pass, notch (`sst::filtersplusplus::Passband`). The SPEC calls it the filter mode |
-| **Filter candidate** | A filter model auditioned to pick the 4 models of v1 (`dsp/FilterCandidates.h`, task 0008) |
+| **Filter candidate** | One of the 7 filter models auditioned in task 0008 to choose the v1 models. Historical: the candidate list left the code in task 0009 |
+| **Filter model list** | The 5 models of v1 in their frozen order (Cytomic SVF, Vintage Ladder, OB-Xd 4-pole, Diode Ladder, K35; playbook ADR 0006): `dsp::filterModelLabels`, the choices of the Model parameter |
+| **Filter setup** | A `FilterSetup`: one filter model in one configuration. `dsp::filterSetups()` holds one per supported (model, passband) pair, 9 in all, each with its own prepared filter in the processor |
+| **Mode fallback** | A Mode the selected model lacks plays its low pass (ADR 0006); applied by `dsp::filterSetupIndex` |
 | **Silence floor** | Lowest value of a gain control, −60 dB internally: displayed `-inf`, gives a gain of exactly 0 (ADR 0004) |
 | **Render case** | A named parameter setup (and optional automation) that `MoodzFilterTools render` applies to every test signal; one render case × one test signal = one golden reference |
 | **Test signal** | Standardised input of a test: impulse, sine, sweep, pink noise, loop |

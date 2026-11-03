@@ -1,6 +1,6 @@
 #include "plugin/Parameters.h"
 
-#include "dsp/FilterCandidates.h"
+#include "dsp/FilterModels.h"
 #include "dsp/SmoothedGain.h"
 
 namespace moodz::parameters
@@ -35,13 +35,19 @@ namespace moodz::parameters
         return trimmed.containsIgnoreCase ("k") ? value * 1000.0f : value;
     }
 
-    int toModelIndex (float rawValue) noexcept
+    namespace
     {
-        if (!std::isfinite (rawValue))
-            return 0;
-        constexpr auto last = static_cast<float> (dsp::filterCandidateCount - 1);
-        return static_cast<int> (std::clamp (rawValue, 0.0f, last) + 0.5f);
+        int toChoiceIndex (float rawValue, std::size_t count) noexcept
+        {
+            if (!std::isfinite (rawValue))
+                return 0;
+            const auto last = static_cast<float> (count - 1);
+            return static_cast<int> (std::clamp (rawValue, 0.0f, last) + 0.5f);
+        }
     }
+
+    int toModelIndex (float rawValue) noexcept { return toChoiceIndex (rawValue, dsp::filterModelCount); }
+    int toModeIndex (float rawValue) noexcept { return toChoiceIndex (rawValue, dsp::filterModeCount); }
 
     juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
     {
@@ -62,20 +68,19 @@ namespace moodz::parameters
                 .withStringFromValueFunction ([] (float db, int) { return decibelsToText (db); })
                 .withValueFromStringFunction ([] (const juce::String& text) { return textToDecibels (text); })));
 
-        // Task 0008, audition build: the 7 filter candidates, chosen by ear in Live; task 0009
-        // keeps 4 (SPEC). Default: the first candidate (SPEC "Model 1").
+        // ADR 0006: the five models in their frozen order, default Model 1 (Cytomic SVF)
         juce::StringArray modelNames;
-        for (const auto& candidate : dsp::filterCandidates())
-            modelNames.add (candidate.label);
+        for (const auto* label : dsp::filterModelLabels)
+            modelNames.add (label);
         layout.add (std::make_unique<juce::AudioParameterChoice> (
-            juce::ParameterID { id::filterModel, version }, "Model", modelNames, 0));
+            juce::ParameterID { id::filterModel, 2 }, "Model", modelNames, 0));
 
         // SPEC: Cutoff 20 Hz to 20 kHz, logarithmic, default 1 kHz. Skew centred on
         // sqrt(20 * 20000) = 632 Hz, so equal control travel gives equal frequency ratios.
         juce::NormalisableRange<float> cutoffRange { dsp::MultimodeFilter::minCutoffHz, dsp::MultimodeFilter::maxCutoffHz };
         cutoffRange.setSkewForCentre (std::sqrt (dsp::MultimodeFilter::minCutoffHz * dsp::MultimodeFilter::maxCutoffHz));
         layout.add (std::make_unique<juce::AudioParameterFloat> (
-            juce::ParameterID { id::cutoff, version },
+            juce::ParameterID { id::cutoff, 2 },
             "Cutoff",
             cutoffRange,
             1000.0f,
@@ -85,11 +90,19 @@ namespace moodz::parameters
 
         // SPEC: Resonance 0 to 100 %, default 20 %
         layout.add (std::make_unique<juce::AudioParameterFloat> (
-            juce::ParameterID { id::resonance, version },
+            juce::ParameterID { id::resonance, 2 },
             "Resonance",
             juce::NormalisableRange<float> { 0.0f, 100.0f, 0.1f },
             20.0f,
             juce::AudioParameterFloatAttributes {}.withLabel ("%")));
+
+        // SPEC Mode, ADR 0006: the same four passbands for every model, default low pass; a
+        // passband the model lacks plays low pass (dsp::filterSetupIndex)
+        juce::StringArray modeNames;
+        for (const auto* label : dsp::filterModeLabels)
+            modeNames.add (label);
+        layout.add (std::make_unique<juce::AudioParameterChoice> (
+            juce::ParameterID { id::filterMode, version }, "Mode", modeNames, 0));
 
         return layout;
     }
@@ -98,9 +111,10 @@ namespace moodz::parameters
         : gainOut (state.getRawParameterValue (id::gainOut)),
           filterModel (state.getRawParameterValue (id::filterModel)),
           cutoff (state.getRawParameterValue (id::cutoff)),
-          resonance (state.getRawParameterValue (id::resonance))
+          resonance (state.getRawParameterValue (id::resonance)),
+          filterMode (state.getRawParameterValue (id::filterMode))
     {
-        jassert (gainOut != nullptr && filterModel != nullptr && cutoff != nullptr && resonance != nullptr);
+        jassert (gainOut != nullptr && filterModel != nullptr && cutoff != nullptr && resonance != nullptr && filterMode != nullptr);
     }
 
     Params Snapshotter::snapshot() const noexcept
@@ -111,6 +125,7 @@ namespace moodz::parameters
             toModelIndex (filterModel->load (relaxed)),
             cutoff->load (relaxed),
             resonance->load (relaxed) / 100.0f,
+            toModeIndex (filterMode->load (relaxed)),
         };
     }
 }

@@ -13,11 +13,13 @@ namespace moodz::parameters
         inline constexpr const char* filterModel = "filterModel";
         inline constexpr const char* cutoff = "cutoff";
         inline constexpr const char* resonance = "resonance";
+        inline constexpr const char* filterMode = "filterMode";
     }
 
     // Parameter version passed to juce::ParameterID, incremented with every addition:
-    // 1 = gainOut (task 0003), 2 = filterModel, cutoff, resonance (task 0008).
-    inline constexpr int version = 2;
+    // 1 = gainOut (task 0003), 2 = filterModel, cutoff, resonance (task 0008),
+    // 3 = filterMode (task 0009). A parameter keeps the version it was added with.
+    inline constexpr int version = 3;
 
     juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
 
@@ -31,9 +33,10 @@ namespace moodz::parameters
 
     static_assert (std::atomic<float>::is_always_lock_free, "the audio thread reads parameters through std::atomic<float>");
 
-    // Model index from the raw choice value, always within the candidate list: NaN, infinity
-    // and out-of-range values are bounded in float before the conversion to int.
+    // Model and mode indices from the raw choice values, always within their lists: NaN,
+    // infinity and out-of-range values are bounded in float before the conversion to int.
     int toModelIndex (float rawValue) noexcept;
+    int toModeIndex (float rawValue) noexcept;
 
     // Plain copy of the parameter values, taken at the start of each block.
     // The dsp layer reads only this, never the APVTS.
@@ -43,6 +46,7 @@ namespace moodz::parameters
         int filterModel = 0;
         float cutoffHz = 1000.0f;
         float resonance = 0.2f; // 0..1, from the 0..100 % parameter
+        int filterMode = 0; // index in dsp::filterModeLabels
     };
 
     // Raw atomic values, looked up once so that a snapshot needs no string lookup.
@@ -57,5 +61,6 @@ namespace moodz::parameters
         const std::atomic<float>* filterModel;
         const std::atomic<float>* cutoff;
         const std::atomic<float>* resonance;
+        const std::atomic<float>* filterMode;
     };
 }
