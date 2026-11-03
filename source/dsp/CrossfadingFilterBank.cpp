@@ -58,10 +58,8 @@ namespace moodz::dsp
 
     void CrossfadingFilterBank::startPendingCrossfade() noexcept MOODZ_NONBLOCKING
     {
-        // A choice made during a crossfade waits for it to end
-        if (crossfadePosition < crossfadeLength)
-            return;
-        if (pending.variant != current)
+        // A choice of another variant made during a crossfade waits for it to end
+        if (pending.variant != current && crossfadePosition >= crossfadeLength)
         {
             outgoing = current;
             current = pending.variant;
@@ -69,7 +67,13 @@ namespace moodz::dsp
             crossfadePosition = 0;
         }
         // The same variant with a new extra value: no crossfade, sst-filters smooths it (task 0010)
-        filters[current].setExtra (pending.extra);
+        if (pending.variant == current)
+            filters[current].setExtra (pending.extra);
+        for (auto index : { current, outgoing })
+        {
+            filters[index].setCutoffHz (cutoffHz);
+            filters[index].setResonance (resonance);
+        }
     }
 
     void CrossfadingFilterBank::process (std::span<const std::span<float>> channels, int numSamples) noexcept MOODZ_NONBLOCKING
@@ -84,16 +88,12 @@ namespace moodz::dsp
         if (count <= 0)
             return;
 
-        startPendingCrossfade();
-        for (auto index : { current, outgoing })
-        {
-            filters[index].setCutoffHz (cutoffHz);
-            filters[index].setResonance (resonance);
-        }
-
         int start = 0;
         while (start < count)
         {
+            // Also between chunks: a choice held during a crossfade starts the sample it ends,
+            // so the output does not depend on the block size
+            startPendingCrossfade();
             const auto offset = static_cast<std::size_t> (start);
             if (crossfadePosition >= crossfadeLength)
             {

@@ -65,11 +65,11 @@ namespace
         size_t next = 0;
         while (start < total)
         {
-            int length = std::min (blockSize, total - start);
-            if (next < changes.size() && start < changes[next].at && changes[next].at < start + length)
-                length = changes[next].at - start;
             if (next < changes.size() && start == changes[next].at)
                 bank.select (changes[next++].choice);
+            int length = std::min (blockSize, total - start);
+            if (next < changes.size() && changes[next].at < start + length)
+                length = changes[next].at - start;
             const std::array<std::span<float>, 1> channels { std::span<float> { output }.subspan (static_cast<size_t> (start), static_cast<size_t> (length)) };
             bank.process (channels, length);
             start += length;
@@ -133,15 +133,48 @@ TEST_CASE ("A change crossfades to the new variant in 20 ms", "[dsp][crossfade]"
 
 TEST_CASE ("A change during a crossfade waits for it to end", "[dsp][crossfade]")
 {
-    // Change to Cytomic HP at 4096, to Vintage Huovilainen at 4608 while the first crossfade runs
-    // (until 5056). The second one starts at the first block after that, 5120, and ends at
-    // 5120 + 960: from there the output is Vintage Huovilainen alone, reset at 5120.
+    // Change to Cytomic HP at 4096, to Vintage Huovilainen at 4608 while the first crossfade runs.
+    // The second one starts the sample the first one ends, 4096 + 960 = 5056, whatever the block
+    // size (code review of task 0011), and ends at 5056 + 960: from there the output is Vintage
+    // Huovilainen alone, reset at 5056.
+    constexpr int secondStart = 4096 + crossfadeLength;
     const auto input = noise (16384, 41u);
-    const auto output = renderBank (cytomicLowPass, { { 4096, cytomicHighPass }, { 4608, vintageHuov } }, input, 512);
-    const auto last = renderAloneFrom (vintageHuov, input, 5120);
-    for (auto s : output)
-        REQUIRE (std::isfinite (s));
-    CHECK (largestDifference (output, last, 5120 + crossfadeLength, output.size()) < 1e-6f);
+    const auto last = renderAloneFrom (vintageHuov, input, secondStart);
+    for (int blockSize : { 1, 7, 64, 512, 16384 })
+    {
+        INFO ("block size " << blockSize);
+        const auto output = renderBank (cytomicLowPass, { { 4096, cytomicHighPass }, { 4608, vintageHuov } }, input, blockSize);
+        for (auto s : output)
+            REQUIRE (std::isfinite (s));
+        CHECK (largestDifference (output, last, secondStart + crossfadeLength, output.size()) < 1e-6f);
+    }
+}
+
+TEST_CASE ("A new extra value during a crossfade reaches the incoming variant", "[dsp][crossfade]")
+{
+    // Code review of task 0011: crossfade from Cytomic LP to OB-Xd Morph 0.5 at 4096, Morph moved
+    // to 1.0 at 4352 while the crossfade runs. The incoming OB-Xd takes 1.0 at 4352, as it would
+    // without a crossfade: after the crossfade the output is OB-Xd alone, reset at 4096, Morph 0.5
+    // then 1.0 from 4352.
+    constexpr int change = 4096, moved = 4352;
+    const auto input = noise (8192, 61u);
+    const auto output = renderBank (cytomicLowPass, { { change, obxdMorph }, { moved, FilterChoice { obxdMorph.variant, 1.0f } } }, input, 512);
+
+    MultimodeFilter filter;
+    REQUIRE (filter.configure (filterVariants()[obxdMorph.variant]));
+    filter.prepare (sampleRate, 512);
+    filter.setCutoffHz (1000.0f);
+    filter.setResonance (0.5f);
+    filter.setExtra (obxdMorph.extra);
+    std::vector<float> expected (input.size(), 0.0f);
+    std::copy (input.begin() + change, input.end(), expected.begin() + change);
+    std::span<float> all { expected };
+    const std::array<std::span<float>, 1> before { all.subspan (change, moved - change) };
+    filter.process (before, moved - change);
+    filter.setExtra (1.0f);
+    const std::array<std::span<float>, 1> after { all.subspan (moved) };
+    filter.process (after, static_cast<int> (expected.size()) - moved);
+    CHECK (largestDifference (output, expected, change + crossfadeLength, output.size()) < 1e-6f);
 }
 
 TEST_CASE ("The crossfading bank does not depend on the block size", "[dsp][crossfade]")
