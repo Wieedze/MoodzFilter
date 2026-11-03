@@ -23,7 +23,7 @@ namespace moodz::dsp
         void reset() noexcept;
 
         // Clamped to [silenceFloorDb, maxDb]; a non-finite value is ignored.
-        void setTargetDb (float gainDb) noexcept;
+        void setTargetDb (float gainDb) noexcept MOODZ_NONBLOCKING;
 
         // Every channel span must hold at least numSamples samples. The same gain
         // is applied to all channels (linked stereo, SPEC).

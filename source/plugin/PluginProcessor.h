@@ -1,5 +1,7 @@
 #pragma once
 
+#include "dsp/FilterCandidates.h"
+#include "dsp/MultimodeFilter.h"
 #include "dsp/Realtime.h"
 #include "dsp/SmoothedGain.h"
 #include "plugin/Parameters.h"
@@ -47,6 +49,11 @@ private:
     juce::AudioProcessorValueTreeState state { *this, nullptr, "MoodzFilter", moodz::parameters::createLayout() };
     moodz::parameters::Snapshotter snapshotter { state };
     moodz::dsp::SmoothedGain gainOut;
+
+    // One prepared filter per candidate: processBlock only selects one, so switching the model
+    // never allocates or calls prepareInstance on the audio thread (task 0008).
+    std::array<moodz::dsp::MultimodeFilter, moodz::dsp::filterCandidateCount> filters;
+    int currentFilter = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginProcessor)
 };

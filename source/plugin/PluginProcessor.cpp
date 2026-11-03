@@ -11,6 +11,14 @@ PluginProcessor::PluginProcessor()
                      #endif
                        )
 {
+    // Off the audio thread: configure every candidate once (sst-filters' prepareInstance
+    // allocates on first use)
+    const auto candidates = moodz::dsp::filterCandidates();
+    for (size_t i = 0; i < filters.size(); ++i)
+    {
+        [[maybe_unused]] const bool valid = filters[i].configure (candidates[i]);
+        jassert (valid);
+    }
 }
 
 PluginProcessor::~PluginProcessor()
@@ -88,8 +96,17 @@ void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     gainOut.prepare (sampleRate, samplesPerBlock);
     // Start at the current parameter value, without a ramp from the default
-    gainOut.setTargetDb (snapshotter.snapshot().gainOutDb);
+    const auto params = snapshotter.snapshot();
+    gainOut.setTargetDb (params.gainOutDb);
     gainOut.reset();
+
+    for (auto& filter : filters)
+    {
+        filter.prepare (sampleRate, samplesPerBlock);
+        filter.setCutoffHz (params.cutoffHz);
+        filter.setResonance (params.resonance);
+    }
+    currentFilter = std::clamp (params.filterModel, 0, static_cast<int> (filters.size()) - 1);
 }
 
 void PluginProcessor::releaseResources()
@@ -147,6 +164,18 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     const auto params = snapshotter.snapshot();
     gainOut.setTargetDb (params.gainOutDb);
 
+    // A newly selected model starts from a clean state (no crossfade yet: a click is possible,
+    // task 0008 out of scope)
+    const auto selected = std::clamp (params.filterModel, 0, static_cast<int> (filters.size()) - 1);
+    if (selected != currentFilter)
+    {
+        filters[static_cast<size_t> (selected)].reset();
+        currentFilter = selected;
+    }
+    auto& filter = filters[static_cast<size_t> (currentFilter)];
+    filter.setCutoffHz (params.cutoffHz);
+    filter.setResonance (params.resonance);
+
     // Mono or stereo only (isBusesLayoutSupported), so two spans are enough
     const auto numSamples = buffer.getNumSamples();
     const auto numChannels = std::min ({ totalNumOutputChannels, buffer.getNumChannels(), 2 });
@@ -154,7 +183,10 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     for (int channel = 0; channel < numChannels; ++channel)
         channels[static_cast<size_t> (channel)] = { buffer.getWritePointer (channel), static_cast<size_t> (numSamples) };
 
-    gainOut.process (std::span { channels.data(), static_cast<size_t> (numChannels) }, numSamples);
+    // SPEC signal chain: filter, then gain out
+    const std::span<const std::span<float>> active { channels.data(), static_cast<size_t> (numChannels) };
+    filter.process (active, numSamples);
+    gainOut.process (active, numSamples);
 }
 
 //==============================================================================

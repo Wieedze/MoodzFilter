@@ -74,8 +74,8 @@ namespace
         return 20.0 * std::log10 (rms (output, 4800) / rms (input, 4800));
     }
 
-    const FilterSetup cytomicLowPass { sfpp::FilterModel::CytomicSVF, { sfpp::Passband::LP }, "cytomic-svf-lp" };
-    const FilterSetup cytomicHighPass { sfpp::FilterModel::CytomicSVF, { sfpp::Passband::HP }, "cytomic-svf-hp" };
+    const FilterSetup cytomicLowPass { sfpp::FilterModel::CytomicSVF, { sfpp::Passband::LP }, "cytomic-svf-lp", "Cytomic SVF LP" };
+    const FilterSetup cytomicHighPass { sfpp::FilterModel::CytomicSVF, { sfpp::Passband::HP }, "cytomic-svf-hp", "Cytomic SVF HP" };
 }
 
 TEST_CASE ("MultimodeFilter low pass response", "[dsp][filter]")
