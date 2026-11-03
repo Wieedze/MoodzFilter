@@ -52,13 +52,15 @@ Unless stated, the signal is a 200 Hz sine at −12 dBFS, stereo, 48 kHz, blocks
 
 ## Definition of done
 
-* [ ] Tests written before the code, red then green.
-* [ ] Debug, Release, RTSan: `ctest` green.
-* [ ] `check` green; `compare` green against the current references, no `golden:` commit.
-* [ ] pluginval 10 green.
-* [ ] `rt-safety-reviewer` passed.
-* [ ] `GLOSSARY.md` updated (Crossfade, Crossfading filter bank, Click measure).
-* [ ] **Maxime: the CI installer loads in Live; changing the Model, the Diode slope step and the Vintage variant during playback, and automating them, no longer clicks.**
-* [ ] `task-verifier`: pass. Post-mortem written, `STATE.md` updated.
+* [x] Tests written before the code, red then green.
+* [x] Debug, Release, RTSan: `ctest` green.
+* [x] `check` green; `compare` green against the current references, no `golden:` commit.
+* [x] pluginval 10 green.
+* [x] `rt-safety-reviewer` passed.
+* [x] `GLOSSARY.md` updated (Crossfade, Crossfading filter bank, Click measure).
+* [x] **Maxime: the CI installer loads in Live; changing the Model, the Diode slope step and the Vintage variant during playback, and automating them, no longer clicks.** Approved 2026-11-03 at 20:33 with the installer of CI run 41674954975 (commit 15b67b8).
+* [x] `task-verifier`: pass. Post-mortem written, `STATE.md` updated.
 
 ## End note (filled by the task-verifier)
+
+2026-11-03, task-verifier: pass (1 round), on 6101e66. Local Debug: `ctest` 75/75 green, `MoodzFilterTools check` all passed, `render` + `compare` against `tests/golden` bit-exact (max error 0, no `golden:` commit). Click measures (`./Builds/PluginTests "[crossfade]" -s | grep click`): 3.6e-4 Cytomic SVF to Diode Ladder, 1.5e-4 Diode slope 12 to 18 dB, 1.6e-4 Vintage Runge-Kutta compensated to Huovilainen, 2.6e-4 slope wobble over 1 s. The bound is 1e-3, more than 90 times under the red run (smallest 0.091); about 1.7e-4 is the sine alone. The crossfade lasts 960 samples at 48 kHz (±1 sample), a choice made during a crossfade starts the sample the running one ends whatever the block size, and the bank output does not depend on the block size (1e-6). The alternating slope passes with the crossfade alone, so no hysteresis. Release, RTSan and pluginval 10 green in CI. Maxime's Live test approved 2026-11-03 20:33. Left in `FUTURE.md`: reversing a crossfade when the choice comes back (A to B to A), one shared sample-rate fallback for every dsp processor. Post-mortem: playbook `docs/plugins/moodzfilter/learning/0011-model-crossfade.md`.

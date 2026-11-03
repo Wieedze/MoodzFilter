@@ -8,11 +8,11 @@ Maintained by hand. A task does not close without updating this file.
 | Current phase | 2 (DSP core: filters) |
 | Gate to pass | Gate 2: DSP tests and golden references green, CPU budget set in `benchmarks/budget.json` and met, listening approved (playbook `docs/06_START_PLAN.md`, ROADMAP p2). Gate 1 passed 2026-11-02: green CI including RealtimeSanitizer (run 41524747297), green pluginval 10, Maxime's Live test at 22:16 (plugin loaded, Gain out from `-inf` to `+6.0 dB`, session saved and reloaded with the value kept) |
 | Plugin identity (ADR 0002) | `Rdkm` / `Mzf1`, VST3 only, Windows only for v1. Final once a session is saved in Live |
-| Current task | 0011 Crossfade between filter variants (`docs/tasks/0011-model-crossfade.md`), started 2026-11-03 on `task/0011-model-crossfade`: a Model change, a Diode slope step or a Vintage variant change crossfades over 20 ms. 0010 Per-model settings: done 2026-11-03 (PR #13, merged). 0009 (PR #12) and 0008 (PR #11): done 2026-11-03. Earlier tasks 0001 to 0007: done 2026-11-02, see their task files and the playbook post-mortems |
+| Current task | — (next: input drive with oversampling, to write). 0011 Crossfade between filter variants: done 2026-11-03 (PR #14): a Model change, a Diode slope step or a Vintage variant change crossfades over 20 ms. 0010 Per-model settings: done 2026-11-03 (PR #13, merged). 0009 (PR #12) and 0008 (PR #11): done 2026-11-03. Earlier tasks 0001 to 0007: done 2026-11-02, see their task files and the playbook post-mortems |
 | Pinned JUCE version | 9.0.5 |
 | CPU budget per block | — |
 | Known defects (sound, perf, hosts) | — |
-| Next tasks | Crossfade on a Model change (SPEC success criterion 3; also covers a Diode slope step and a Vintage variant change, and the slope hysteresis in `FUTURE.md`). Then the rest of the ROADMAP p2 lane: input drive with 2x and 4x oversampling (latency reported, dry path delayed); BPM-synced LFO on the cutoff (block size test with the LFO active); dry/wet mix, Gain in (−∞ to +12 dB, ADR 0004), smoothing everywhere; CPU budget and listening in Live (gate 2). Known limit: sst-basic-blocks builds on x86_64 only without simde (ADR 0005) |
+| Next tasks | The rest of the ROADMAP p2 lane: input drive with 2x and 4x oversampling (latency reported, dry path delayed; reuses the crossfade on an oversampling change); BPM-synced LFO on the cutoff (block size test with the LFO active); dry/wet mix, Gain in (−∞ to +12 dB, ADR 0004), smoothing everywhere; CPU budget and listening in Live (gate 2, includes the cost of two variants during a crossfade). Known limit: sst-basic-blocks builds on x86_64 only without simde (ADR 0005) |
 
 ## Working environment
 
