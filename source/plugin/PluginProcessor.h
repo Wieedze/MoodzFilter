@@ -50,9 +50,9 @@ private:
     moodz::parameters::Snapshotter snapshotter { state };
     moodz::dsp::SmoothedGain gainOut;
 
-    // One prepared filter per supported (model, passband) pair: processBlock only selects one,
-    // so switching the model or the mode never allocates or calls prepareInstance on the audio
-    // thread (tasks 0008, 0009).
+    // One prepared filter per entry of the filter list: processBlock only selects one, so
+    // switching the model never allocates or calls prepareInstance on the audio thread
+    // (tasks 0008, 0009).
     std::array<moodz::dsp::MultimodeFilter, moodz::dsp::filterSetupCount> filters;
     std::size_t currentFilter = 0;
 

@@ -106,7 +106,7 @@ void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
         filter.setCutoffHz (params.cutoffHz);
         filter.setResonance (params.resonance);
     }
-    currentFilter = moodz::dsp::filterSetupIndex (params.filterModel, params.filterMode);
+    currentFilter = static_cast<std::size_t> (params.filterModel);
 }
 
 void PluginProcessor::releaseResources()
@@ -165,9 +165,8 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     gainOut.setTargetDb (params.gainOutDb);
 
     // A newly selected filter starts from a clean state (no crossfade yet: a click is possible,
-    // tasks 0008 and 0009 out of scope). A mode the model lacks maps to its low pass, so it
-    // keeps the same filter and its state (ADR 0006).
-    const auto selected = moodz::dsp::filterSetupIndex (params.filterModel, params.filterMode);
+    // tasks 0008 and 0009 out of scope). The snapshot keeps the index within the list.
+    const auto selected = static_cast<std::size_t> (params.filterModel);
     if (selected != currentFilter)
     {
         filters[selected].reset();

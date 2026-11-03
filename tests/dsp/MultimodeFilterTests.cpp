@@ -11,8 +11,8 @@
 #include <numbers>
 #include <vector>
 
-using moodz::dsp::filterSetups;
 using moodz::dsp::FilterSetup;
+using moodz::dsp::filterSetups;
 using moodz::dsp::MultimodeFilter;
 namespace sfpp = sst::filtersplusplus;
 

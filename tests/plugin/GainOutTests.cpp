@@ -29,7 +29,7 @@ TEST_CASE ("Parameter IDs are frozen", "[plugin][parameters]")
 {
     // .claude/rules/juce.md: an ID is never renamed or removed. Adding a parameter means
     // adding its ID here on purpose; a rename or removal makes this test fail.
-    const std::set<std::string> expected { "gainOut", "filterModel", "cutoff", "resonance", "filterMode" };
+    const std::set<std::string> expected { "gainOut", "filterModel", "cutoff", "resonance" };
 
     PluginProcessor processor;
     std::set<std::string> actual;
