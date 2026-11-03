@@ -9,6 +9,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 using moodz::dsp::CrossfadingFilterBank;
@@ -199,4 +200,34 @@ TEST_CASE ("The crossfading bank handles a block of 0 samples and long blocks", 
     const std::array<std::span<float>, 1> rest { all.subspan (4096) };
     bank.process (rest, static_cast<int> (output.size()) - 4096);
     CHECK (largestDifference (output, reference, 0, output.size()) < 1e-6f);
+}
+
+TEST_CASE ("A non-finite sample rate falls back to 48 kHz", "[dsp][crossfade]")
+{
+    // rt-safety review of task 0011: prepare let +inf through to the crossfade length (and the
+    // filters). A host never sends it; the bank then behaves as at 48 kHz, crossfade included.
+    const auto input = noise (8192, 59u);
+    auto render = [&] (double rate) {
+        CrossfadingFilterBank bank;
+        bank.prepare (rate, 512);
+        bank.setCutoffHz (1000.0f);
+        bank.setResonance (0.5f);
+        bank.select (cytomicLowPass);
+        bank.reset();
+        auto output = input;
+        std::span<float> all { output };
+        const std::array<std::span<float>, 1> first { all.first (4096) };
+        bank.process (first, 4096);
+        bank.select (cytomicHighPass);
+        const std::array<std::span<float>, 1> rest { all.subspan (4096) };
+        bank.process (rest, 4096);
+        return output;
+    };
+    const auto reference = render (48000.0);
+    for (double rate : { std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN(), -1.0 })
+    {
+        INFO ("rate " << rate);
+        const auto output = render (rate);
+        CHECK (largestDifference (output, reference, 0, output.size()) < 1e-6f);
+    }
 }

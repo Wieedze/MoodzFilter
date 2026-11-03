@@ -39,7 +39,7 @@ namespace moodz::dsp
     void MultimodeFilter::prepare (double newSampleRate, int /* maxBlockSize */)
     {
         // The filter works in packets of packetSize, whatever the host block size
-        sampleRate = newSampleRate > 0.0 ? newSampleRate : 48000.0;
+        sampleRate = std::isfinite (newSampleRate) && newSampleRate > 0.0 ? newSampleRate : 48000.0;
         filter.setSampleRateAndBlockSize (sampleRate, packetSize);
         filter.setFilterModel (setup.model);
         filter.setModelConfiguration (setup.config);

@@ -25,7 +25,7 @@ namespace moodz::dsp
             filter.setCutoffHz (cutoffHz);
             filter.setResonance (resonance);
         }
-        const double rate = sampleRate > 0.0 ? sampleRate : 48000.0;
+        const double rate = std::isfinite (sampleRate) && sampleRate > 0.0 ? sampleRate : 48000.0;
         crossfadeLength = std::max (1, static_cast<int> (std::lround (crossfadeSeconds * rate)));
         reset();
     }
