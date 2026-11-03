@@ -77,7 +77,7 @@ namespace moodz::parameters
         gainOutRange.setSkewForCentre (-12.0f);
 
         layout.add (std::make_unique<juce::AudioParameterFloat> (
-            juce::ParameterID { id::gainOut, 1 },
+            juce::ParameterID { id::gainOut, version::task0003 },
             "Gain out",
             gainOutRange,
             0.0f,
@@ -91,14 +91,14 @@ namespace moodz::parameters
         for (const auto& setup : dsp::filterSetups())
             modelNames.add (setup.label);
         layout.add (std::make_unique<juce::AudioParameterChoice> (
-            juce::ParameterID { id::filterModel, 2 }, "Model", modelNames, 0));
+            juce::ParameterID { id::filterModel, version::task0008 }, "Model", modelNames, 0));
 
         // SPEC: Cutoff 20 Hz to 20 kHz, logarithmic, default 1 kHz. Skew centred on
         // sqrt(20 * 20000) = 632 Hz, so equal control travel gives equal frequency ratios.
         juce::NormalisableRange<float> cutoffRange { dsp::MultimodeFilter::minCutoffHz, dsp::MultimodeFilter::maxCutoffHz };
         cutoffRange.setSkewForCentre (std::sqrt (dsp::MultimodeFilter::minCutoffHz * dsp::MultimodeFilter::maxCutoffHz));
         layout.add (std::make_unique<juce::AudioParameterFloat> (
-            juce::ParameterID { id::cutoff, 2 },
+            juce::ParameterID { id::cutoff, version::task0008 },
             "Cutoff",
             cutoffRange,
             1000.0f,
@@ -108,7 +108,7 @@ namespace moodz::parameters
 
         // SPEC: Resonance 0 to 100 %, default 20 %
         layout.add (std::make_unique<juce::AudioParameterFloat> (
-            juce::ParameterID { id::resonance, 2 },
+            juce::ParameterID { id::resonance, version::task0008 },
             "Resonance",
             juce::NormalisableRange<float> { 0.0f, 100.0f, 0.1f },
             20.0f,
@@ -118,7 +118,7 @@ namespace moodz::parameters
         // back the task 0009 sound. Slope: OB-Xd 4-pole continuously (Morph), Diode Ladder at the
         // nearest 6 dB step.
         layout.add (std::make_unique<juce::AudioParameterFloat> (
-            juce::ParameterID { id::slope, version },
+            juce::ParameterID { id::slope, version::task0010 },
             "Slope",
             juce::NormalisableRange<float> { dsp::minSlopeDb, dsp::maxSlopeDb, 0.1f },
             dsp::maxSlopeDb,
@@ -128,17 +128,17 @@ namespace moodz::parameters
 
         // K35 saturation 0 to 100 %, sst-filters 0 to 4; 25 % is Mild
         layout.add (std::make_unique<juce::AudioParameterFloat> (
-            juce::ParameterID { id::k35Saturation, version },
+            juce::ParameterID { id::k35Saturation, version::task0010 },
             "K35 saturation",
             juce::NormalisableRange<float> { 0.0f, 100.0f, 0.1f },
-            25.0f,
+            dsp::defaultK35Saturation * 100.0f,
             juce::AudioParameterFloatAttributes {}.withLabel ("%")));
 
         juce::StringArray variantNames;
         for (const auto* label : dsp::vintageVariantLabels)
             variantNames.add (label);
         layout.add (std::make_unique<juce::AudioParameterChoice> (
-            juce::ParameterID { id::vintageVariant, version }, "Vintage variant", variantNames, 1));
+            juce::ParameterID { id::vintageVariant, version::task0010 }, "Vintage variant", variantNames, dsp::defaultVintageVariant));
 
         return layout;
     }

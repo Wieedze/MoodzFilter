@@ -8,8 +8,7 @@ namespace moodz::dsp
     namespace
     {
         // Positions of the Model entries (filterSetups) and of their first variant (filterVariants)
-        enum ModelEntry : int
-        {
+        enum ModelEntry : int {
             vintageLadderEntry = 4,
             obxdEntry = 5,
             diodeLadderEntry = 6,
@@ -18,7 +17,6 @@ namespace moodz::dsp
         };
         constexpr std::size_t firstVintageVariant = 4, obxdVariant = 10, firstDiodeVariant = 11, k35LowPassVariant = 15, k35HighPassVariant = 16;
         constexpr int diodeSteps = 4; // 6, 12, 18, 24 dB
-        constexpr float defaultSaturation = 0.25f; // sst-filters K35 Mild (ADR 0008)
     }
 
     FilterChoice chooseFilter (int modelIndex, float slopeDb, int vintageVariant, float k35Saturation) noexcept MOODZ_NONBLOCKING
@@ -26,7 +24,7 @@ namespace moodz::dsp
         const int model = std::clamp (modelIndex, 0, static_cast<int> (filterSetupCount) - 1);
         // Bounded in float before any conversion to int (NaN and infinity are undefined there)
         const float slope = std::isnan (slopeDb) ? maxSlopeDb : std::clamp (slopeDb, minSlopeDb, maxSlopeDb);
-        const float saturation = std::isfinite (k35Saturation) ? std::clamp (k35Saturation, 0.0f, 1.0f) : defaultSaturation;
+        const float saturation = std::isfinite (k35Saturation) ? std::clamp (k35Saturation, 0.0f, 1.0f) : defaultK35Saturation;
         // Position of the slope between 6 dB (0) and 24 dB (1)
         const float slopePosition = (slope - minSlopeDb) / (maxSlopeDb - minSlopeDb);
 

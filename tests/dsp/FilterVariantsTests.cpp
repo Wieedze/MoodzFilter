@@ -119,7 +119,15 @@ TEST_CASE ("The Diode Ladder plays the nearest slope step", "[dsp][filter]")
 {
     // ADR 0008: nearest of 6, 12, 18, 24 dB; a tie (9, 15, 21 dB) goes to the steeper step
     const std::array<std::pair<float, size_t>, 9> cases { {
-        { 6.0f, 11 }, { 8.9f, 11 }, { 9.0f, 12 }, { 9.1f, 12 }, { 15.0f, 13 }, { 20.9f, 13 }, { 21.0f, 14 }, { 24.0f, 14 }, { 30.0f, 14 },
+        { 6.0f, 11 },
+        { 8.9f, 11 },
+        { 9.0f, 12 },
+        { 9.1f, 12 },
+        { 15.0f, 13 },
+        { 20.9f, 13 },
+        { 21.0f, 14 },
+        { 24.0f, 14 },
+        { 30.0f, 14 },
     } };
     for (auto [slope, variant] : cases)
     {

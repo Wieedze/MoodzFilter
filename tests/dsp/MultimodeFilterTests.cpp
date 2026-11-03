@@ -177,7 +177,8 @@ TEST_CASE ("MultimodeFilter stays finite when the sample rate drops", "[dsp][fil
 
 TEST_CASE ("MultimodeFilter does not depend on the block size", "[dsp][filter]")
 {
-    // Cutoff from 300 Hz to 5 kHz exactly at sample 4096 (a packet boundary), whatever the block size
+    // Cutoff from 300 Hz to 5 kHz and extra value from 0.3 to 0.9 (OB-Xd Morph, K35 saturation)
+    // exactly at sample 4096 (a packet boundary), whatever the block size
     constexpr int changeAt = 4096;
     const auto input = noise (8192, 11u);
     const int total = static_cast<int> (input.size());
@@ -186,6 +187,7 @@ TEST_CASE ("MultimodeFilter does not depend on the block size", "[dsp][filter]")
     {
         auto render = [&] (int blockSize) {
             auto filter = preparedFilter (setup, 300.0f, 0.7f);
+            filter.setExtra (0.3f);
             auto output = input;
             int start = 0;
             while (start < total)
@@ -194,7 +196,10 @@ TEST_CASE ("MultimodeFilter does not depend on the block size", "[dsp][filter]")
                 if (start < changeAt && changeAt < start + length)
                     length = changeAt - start;
                 if (start == changeAt)
+                {
                     filter.setCutoffHz (5000.0f);
+                    filter.setExtra (0.9f);
+                }
                 const std::array<std::span<float>, 1> channels { std::span<float> { output }.subspan (static_cast<size_t> (start)) };
                 filter.process (channels, length);
                 start += length;

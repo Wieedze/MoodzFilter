@@ -84,8 +84,12 @@ namespace moodz::dsp
         "Huovilainen 2010 compensated",
     };
 
+    // Per-model setting ranges and defaults, shared by the parameters and chooseFilter (ADR 0008).
+    // The defaults give back the task 0009 sound: Slope at its maximum, 24 dB.
     inline constexpr float minSlopeDb = 6.0f;
     inline constexpr float maxSlopeDb = 24.0f;
+    inline constexpr float defaultK35Saturation = 0.25f; // sst-filters K35 Mild
+    inline constexpr int defaultVintageVariant = 1; // Runge-Kutta compensated
 
     struct FilterChoice
     {
@@ -95,6 +99,6 @@ namespace moodz::dsp
 
     // The filter variant and extra value for a Model entry and the per-model settings (ADR 0008).
     // slopeDb in [minSlopeDb, maxSlopeDb], k35Saturation in 0..1; every input is bounded, and a
-    // non-finite slope or saturation falls back to its default (24 dB, 0.25).
+    // non-finite slope or saturation falls back to its default.
     FilterChoice chooseFilter (int modelIndex, float slopeDb, int vintageVariant, float k35Saturation) noexcept MOODZ_NONBLOCKING;
 }

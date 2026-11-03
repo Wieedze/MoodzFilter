@@ -1,5 +1,7 @@
 #pragma once
 
+#include "dsp/FilterModels.h"
+
 #include <juce_audio_processors/juce_audio_processors.h>
 
 // The single place where parameters are declared (.claude/rules/juce.md).
@@ -18,11 +20,14 @@ namespace moodz::parameters
         inline constexpr const char* vintageVariant = "vintageVariant";
     }
 
-    // Parameter version passed to juce::ParameterID, incremented with every addition:
-    // 1 = gainOut (task 0003), 2 = filterModel, cutoff, resonance (task 0008),
-    // 3 = slope, k35Saturation, vintageVariant (task 0010).
-    // A parameter keeps the version it was added with.
-    inline constexpr int version = 3;
+    // Parameter versions passed to juce::ParameterID, one per wave of additions; the next wave
+    // gets the next number. A parameter keeps the version it was added with, forever.
+    namespace version
+    {
+        inline constexpr int task0003 = 1; // gainOut
+        inline constexpr int task0008 = 2; // filterModel, cutoff, resonance
+        inline constexpr int task0010 = 3; // slope, k35Saturation, vintageVariant
+    }
 
     juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
 
@@ -53,9 +58,9 @@ namespace moodz::parameters
         int filterModel = 0;
         float cutoffHz = 1000.0f;
         float resonance = 0.2f; // 0..1, from the 0..100 % parameter
-        float slopeDb = 24.0f;
-        float k35Saturation = 0.25f; // 0..1, from the 0..100 % parameter
-        int vintageVariant = 1;
+        float slopeDb = dsp::maxSlopeDb;
+        float k35Saturation = dsp::defaultK35Saturation; // 0..1, from the 0..100 % parameter
+        int vintageVariant = dsp::defaultVintageVariant;
     };
 
     // Raw atomic values, looked up once so that a snapshot needs no string lookup.
