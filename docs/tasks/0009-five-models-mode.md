@@ -61,7 +61,7 @@ Unless stated, the signal is a sine at −12 dBFS, 48 kHz, blocks of 512, cutoff
 * [ ] Debug, Release, RTSan (CI): no new warning, `ctest` green.
 * [ ] `check` green; `compare` green against the current references, no `golden:` commit.
 * [ ] pluginval 10 green (CI).
-* [ ] `rt-safety-reviewer` passed (first version: no finding; again on the rescoped diff).
+* [x] `rt-safety-reviewer` passed (first version 8c85445: no finding; rescoped 3232c5d: no real-time violation, 1 low point, the local index bound removed with Mode, restored in the next commit).
 * [ ] `GLOSSARY.md` updated (Filter candidate, Filter list, Filter setup, Passband).
 * [x] Maxime, first version (`8c85445`, 5 models and Mode): conforming in Live, 2026-11-03 14:10 CET.
 * [ ] **Maxime: the CI installer loads in Live; Model shows the 9 entries in order, each one sounds like its name.**

@@ -106,7 +106,7 @@ void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
         filter.setCutoffHz (params.cutoffHz);
         filter.setResonance (params.resonance);
     }
-    currentFilter = static_cast<std::size_t> (params.filterModel);
+    currentFilter = std::min (static_cast<std::size_t> (params.filterModel), filters.size() - 1);
 }
 
 void PluginProcessor::releaseResources()
@@ -165,8 +165,9 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     gainOut.setTargetDb (params.gainOutDb);
 
     // A newly selected filter starts from a clean state (no crossfade yet: a click is possible,
-    // tasks 0008 and 0009 out of scope). The snapshot keeps the index within the list.
-    const auto selected = static_cast<std::size_t> (params.filterModel);
+    // tasks 0008 and 0009 out of scope). The snapshot already bounds the index; the local
+    // bound keeps the array access safe whatever feeds Params (rt-safety review of task 0009).
+    const auto selected = std::min (static_cast<std::size_t> (params.filterModel), filters.size() - 1);
     if (selected != currentFilter)
     {
         filters[selected].reset();
