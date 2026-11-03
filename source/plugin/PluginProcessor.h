@@ -1,7 +1,7 @@
 #pragma once
 
+#include "dsp/CrossfadingFilterBank.h"
 #include "dsp/FilterModels.h"
-#include "dsp/MultimodeFilter.h"
 #include "dsp/Realtime.h"
 #include "dsp/SmoothedGain.h"
 #include "plugin/Parameters.h"
@@ -50,11 +50,9 @@ private:
     moodz::parameters::Snapshotter snapshotter { state };
     moodz::dsp::SmoothedGain gainOut;
 
-    // One prepared filter per entry of the filter list: processBlock only selects one, so
-    // switching the model never allocates or calls prepareInstance on the audio thread
-    // (tasks 0008, 0009).
-    std::array<moodz::dsp::MultimodeFilter, moodz::dsp::filterVariantCount> filters;
-    std::size_t currentFilter = 0;
+    // Every filter variant prepared once, with a crossfade between them (task 0011): switching
+    // never allocates or calls prepareInstance on the audio thread
+    moodz::dsp::CrossfadingFilterBank filters;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginProcessor)
 };

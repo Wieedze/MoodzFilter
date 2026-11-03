@@ -28,6 +28,9 @@ Vocabulary shared between you, the agents and the code (Matt Pocock convention: 
 | **Filter list** | The v1 entries of the Model parameter in their frozen order: each of the 5 models (Cytomic SVF, Vintage Ladder, OB-Xd 4-pole, Diode Ladder, K35) with each passband it has, 9 entries (playbook ADRs 0006, 0007): `dsp::filterSetups()` |
 | **Filter setup** | A `FilterSetup`: one filter model in one configuration. Each entry of the filter list is one, holding its default configuration |
 | **Filter variant** | A filter setup the parameters can reach: the Model entries, plus one per Vintage variant and per Diode Ladder slope step, 17 in all (ADR 0008): `dsp::filterVariants()`. Each has its own prepared filter in the processor; `dsp::chooseFilter` picks one per block |
+| **Crossfade** | When the filter variant changes, the outgoing and incoming variants run side by side for 20 ms and their outputs are mixed linearly, so the change does not click (task 0011) |
+| **Crossfading filter bank** | `dsp::CrossfadingFilterBank`: every filter variant prepared once, the selected one playing, and the crossfade between two of them; a choice made during a crossfade waits for it to end |
+| **Click measure** | Largest absolute second difference of the output, `|y[n] − 2 y[n−1] + y[n−2]|`, after a change; a 200 Hz sine at −12 dBFS gives about 1.7e-4 on its own (task 0011 tests) |
 | **Per-model setting** | A parameter that only some models use, ignored by the others: Slope, K35 saturation, Vintage variant (ADR 0008) |
 | **Slope** | How fast a low-pass filter attenuates above the cutoff, in dB per octave, 6 to 24. The OB-Xd 4-pole plays it continuously (Morph), the Diode Ladder at the nearest 6 dB step |
 | **Morph** | The OB-Xd 4-pole mode that crossfades the outputs of its four poles, so the slope moves continuously from 6 to 24 dB (sst-filters `Slope_Morph`) |
