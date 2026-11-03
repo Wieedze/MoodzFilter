@@ -1,10 +1,11 @@
-#include "dsp/FilterCandidates.h"
 #include "plugin/Parameters.h"
 #include "plugin/PluginProcessor.h"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <numbers>
 #include <vector>
@@ -58,15 +59,22 @@ namespace
     }
 }
 
-TEST_CASE ("Filter model parameter lists the candidates", "[plugin][filter]")
+TEST_CASE ("Filter model parameter lists every model and passband in the frozen order", "[plugin][filter]")
 {
+    // ADR 0007: one entry per model and passband it has; the order is frozen, entries can only
+    // be added at the end
     PluginProcessor processor;
     auto& model = parameter<juce::AudioParameterChoice> (processor, "filterModel");
-    const auto candidates = moodz::dsp::filterCandidates();
-    REQUIRE (model.choices.size() == static_cast<int> (candidates.size()));
-    for (size_t i = 0; i < candidates.size(); ++i)
-        CHECK (model.choices[static_cast<int> (i)] == juce::String (candidates[i].label));
-    CHECK (model.choices[0] == "Cytomic SVF");
+    CHECK (model.choices
+           == juce::StringArray { "Cytomic SVF Low-pass",
+               "Cytomic SVF High-pass",
+               "Cytomic SVF Band-pass",
+               "Cytomic SVF Notch",
+               "Vintage Ladder Low-pass",
+               "OB-Xd 4-pole Low-pass",
+               "Diode Ladder Low-pass",
+               "K35 Low-pass",
+               "K35 High-pass" });
     CHECK (model.getIndex() == 0);
 }
 
@@ -114,7 +122,7 @@ TEST_CASE ("Switching the model on every block stays finite", "[plugin][filter]"
     juce::Random random (42);
     for (int block = 0; block < 375; ++block) // 2 s at 48 kHz
     {
-        model = block % 7;
+        model = block % 9;
         for (int channel = 0; channel < 2; ++channel)
             for (int i = 0; i < 256; ++i)
                 buffer.setSample (channel, i, 0.25f * (random.nextFloat() * 2.0f - 1.0f));
@@ -152,11 +160,13 @@ TEST_CASE ("The snapshot always gives a valid model index", "[plugin][filter]")
     using moodz::parameters::toModelIndex;
     CHECK (toModelIndex (0.0f) == 0);
     CHECK (toModelIndex (2.6f) == 3);
-    CHECK (toModelIndex (6.0f) == 6);
-    CHECK (toModelIndex (99.0f) == 6);
+    CHECK (toModelIndex (8.0f) == 8);
+    CHECK (toModelIndex (9.0f) == 8);
+    CHECK (toModelIndex (99.0f) == 8);
     CHECK (toModelIndex (-3.0f) == 0);
     CHECK (toModelIndex (std::numeric_limits<float>::quiet_NaN()) == 0);
     CHECK (toModelIndex (std::numeric_limits<float>::infinity()) == 0);
+    CHECK (toModelIndex (-std::numeric_limits<float>::infinity()) == 0);
 }
 
 TEST_CASE ("Parameter versions follow the order of addition", "[plugin][parameters]")
@@ -208,4 +218,103 @@ TEST_CASE ("The snapshot maps resonance from percent to 0..1", "[plugin][filter]
         resonance->setValueNotifyingHost (resonance->convertTo0to1 (percent));
         CHECK (snapshotter.snapshot().resonance == Catch::Approx (expected).margin (1e-6));
     }
+}
+
+namespace
+{
+    PluginProcessor& withFilter (PluginProcessor& processor, int model)
+    {
+        parameter<juce::AudioParameterChoice> (processor, "filterModel") = model;
+        parameter<juce::AudioParameterFloat> (processor, "cutoff") = 1000.0f;
+        parameter<juce::AudioParameterFloat> (processor, "resonance") = 0.0f;
+        return processor;
+    }
+
+    // Model entries, ADR 0007
+    constexpr int cytomicHighPass = 1, cytomicBandPass = 2, cytomicNotch = 3, k35HighPass = 8;
+}
+
+TEST_CASE ("Cytomic SVF high pass", "[plugin][filter]")
+{
+    // Task 0007 measured the Cytomic SVF high pass at 1 kHz: 100 Hz at -40.1 dB
+    PluginProcessor processor;
+    withFilter (processor, cytomicHighPass);
+    const auto below = pluginGainDb (processor, 100.0);
+    INFO ("100 Hz gain " << below << " dB");
+    CHECK (below < -34.0);
+    CHECK (below > -46.0);
+    CHECK (pluginGainDb (processor, 10000.0) == Catch::Approx (0.0).margin (1.0));
+}
+
+TEST_CASE ("Cytomic SVF band pass and notch", "[plugin][filter]")
+{
+    // Measured on this signal: band pass 1 kHz 14.1 dB over 100 Hz and 15.4 dB over 10 kHz;
+    // notch 1 kHz at -122.5 dB, 100 Hz and 10 kHz within 0.2 dB of unity. Printed by:
+    // ./Builds/PluginTests "Cytomic SVF band pass and notch" -s | grep -E "band pass|notch 1"
+    PluginProcessor bandProcessor, notchProcessor;
+    withFilter (bandProcessor, cytomicBandPass);
+    withFilter (notchProcessor, cytomicNotch);
+    const auto band100 = pluginGainDb (bandProcessor, 100.0), band1k = pluginGainDb (bandProcessor, 1000.0), band10k = pluginGainDb (bandProcessor, 10000.0);
+    const auto notch100 = pluginGainDb (notchProcessor, 100.0), notch1k = pluginGainDb (notchProcessor, 1000.0), notch10k = pluginGainDb (notchProcessor, 10000.0);
+    INFO ("band pass 100 Hz " << band100 << " dB, 1 kHz " << band1k << " dB, 10 kHz " << band10k << " dB");
+    INFO ("notch 100 Hz " << notch100 << " dB, 1 kHz " << notch1k << " dB, 10 kHz " << notch10k << " dB");
+    CHECK (band1k - band100 > 12.0);
+    CHECK (band1k - band10k > 12.0);
+    CHECK (notch100 - notch1k > 60.0);
+    CHECK (notch10k - notch1k > 60.0);
+}
+
+TEST_CASE ("K35 high pass", "[plugin][filter]")
+{
+    // Measured on this signal: 10 kHz 20.1 dB over 100 Hz. Printed by:
+    // ./Builds/PluginTests "K35 high pass" -s | grep "K35 high pass 100"
+    PluginProcessor processor;
+    withFilter (processor, k35HighPass);
+    const auto below = pluginGainDb (processor, 100.0), above = pluginGainDb (processor, 10000.0);
+    INFO ("K35 high pass 100 Hz " << below << " dB, 10 kHz " << above << " dB");
+    CHECK (above - below > 16.0);
+}
+
+namespace
+{
+    juce::MemoryBlock stateWith (std::initializer_list<std::pair<const char*, double>> values)
+    {
+        juce::XmlElement xml ("MoodzFilter");
+        xml.setAttribute ("stateVersion", 1);
+        for (auto [id, value] : values)
+        {
+            auto* p = xml.createNewChildElement ("PARAM");
+            p->setAttribute ("id", id);
+            p->setAttribute ("value", value);
+        }
+        juce::MemoryBlock block;
+        juce::AudioProcessor::copyXmlToBinary (xml, block);
+        return block;
+    }
+
+    void checkLoadedValues (PluginProcessor& processor)
+    {
+        CHECK (parameter<juce::AudioParameterChoice> (processor, "filterModel").getIndex() == 3);
+        CHECK (parameter<juce::AudioParameterFloat> (processor, "gainOut").get() == Catch::Approx (-3.0f).margin (0.01));
+        CHECK (parameter<juce::AudioParameterFloat> (processor, "cutoff").get() == Catch::Approx (5000.0f).margin (0.5));
+        CHECK (parameter<juce::AudioParameterFloat> (processor, "resonance").get() == Catch::Approx (60.0f).margin (0.01));
+    }
+}
+
+TEST_CASE ("A state saved by task 0008 loads with every value kept", "[plugin][state]")
+{
+    // The state written by task 0008: gainOut, filterModel, cutoff, resonance
+    const auto block = stateWith ({ { "gainOut", -3.0 }, { "filterModel", 3.0 }, { "cutoff", 5000.0 }, { "resonance", 60.0 } });
+    PluginProcessor processor;
+    processor.setStateInformation (block.getData(), static_cast<int> (block.getSize()));
+    checkLoadedValues (processor);
+}
+
+TEST_CASE ("A state with the removed filterMode parameter loads", "[plugin][state]")
+{
+    // The first build of task 0009 (8c85445) saved filterMode, removed by ADR 0007: ignored
+    const auto block = stateWith ({ { "gainOut", -3.0 }, { "filterModel", 3.0 }, { "cutoff", 5000.0 }, { "resonance", 60.0 }, { "filterMode", 2.0 } });
+    PluginProcessor processor;
+    processor.setStateInformation (block.getData(), static_cast<int> (block.getSize()));
+    checkLoadedValues (processor);
 }

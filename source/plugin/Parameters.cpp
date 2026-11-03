@@ -1,6 +1,6 @@
 #include "plugin/Parameters.h"
 
-#include "dsp/FilterCandidates.h"
+#include "dsp/FilterModels.h"
 #include "dsp/SmoothedGain.h"
 
 namespace moodz::parameters
@@ -39,7 +39,7 @@ namespace moodz::parameters
     {
         if (!std::isfinite (rawValue))
             return 0;
-        constexpr auto last = static_cast<float> (dsp::filterCandidateCount - 1);
+        constexpr auto last = static_cast<float> (dsp::filterSetupCount - 1);
         return static_cast<int> (std::clamp (rawValue, 0.0f, last) + 0.5f);
     }
 
@@ -62,11 +62,11 @@ namespace moodz::parameters
                 .withStringFromValueFunction ([] (float db, int) { return decibelsToText (db); })
                 .withValueFromStringFunction ([] (const juce::String& text) { return textToDecibels (text); })));
 
-        // Task 0008, audition build: the 7 filter candidates, chosen by ear in Live; task 0009
-        // keeps 4 (SPEC). Default: the first candidate (SPEC "Model 1").
+        // ADRs 0006, 0007: every model with each passband it has, in the frozen order,
+        // default Cytomic SVF Low-pass
         juce::StringArray modelNames;
-        for (const auto& candidate : dsp::filterCandidates())
-            modelNames.add (candidate.label);
+        for (const auto& setup : dsp::filterSetups())
+            modelNames.add (setup.label);
         layout.add (std::make_unique<juce::AudioParameterChoice> (
             juce::ParameterID { id::filterModel, version }, "Model", modelNames, 0));
 

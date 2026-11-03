@@ -23,8 +23,10 @@ Vocabulary shared between you, the agents and the code (Matt Pocock convention: 
 | **Golden manifest** | `tests/golden/manifest.json`: lists every golden reference with its tolerances (max absolute error, max RMS error in dBFS); a render or reference not listed fails `compare`. Format: plugin ADR 0003 |
 | **Generic editor** | `juce::GenericAudioProcessorEditor`: the editor JUCE draws by itself, one control per parameter. The v1 interface (SPEC) |
 | **Filter model** | One filter design from sst-filters (`sst::filtersplusplus::FilterModel`: Cytomic SVF, OB-Xd 4-pole, Diode Ladder…) with its configuration (passband, slope, drive, submodel): a `FilterSetup` in `dsp/` |
-| **Passband** | What a filter lets through: low pass, high pass, band pass, notch (`sst::filtersplusplus::Passband`). The SPEC calls it the filter mode |
-| **Filter candidate** | A filter model auditioned to pick the 4 models of v1 (`dsp/FilterCandidates.h`, task 0008) |
+| **Passband** | What a filter lets through: low pass, high pass, band pass, notch (`sst::filtersplusplus::Passband`). The SPEC called it the filter mode; since ADR 0007 it is part of each Model entry |
+| **Filter candidate** | One of the 7 filter models auditioned in task 0008 to choose the v1 models. Historical: the candidate list left the code in task 0009 |
+| **Filter list** | The v1 entries of the Model parameter in their frozen order: each of the 5 models (Cytomic SVF, Vintage Ladder, OB-Xd 4-pole, Diode Ladder, K35) with each passband it has, 9 entries (playbook ADRs 0006, 0007): `dsp::filterSetups()` |
+| **Filter setup** | A `FilterSetup`: one filter model in one configuration. Each entry of the filter list is one, with its own prepared filter in the processor |
 | **Silence floor** | Lowest value of a gain control, −60 dB internally: displayed `-inf`, gives a gain of exactly 0 (ADR 0004) |
 | **Render case** | A named parameter setup (and optional automation) that `MoodzFilterTools render` applies to every test signal; one render case × one test signal = one golden reference |
 | **Test signal** | Standardised input of a test: impulse, sine, sweep, pink noise, loop |

@@ -17,6 +17,7 @@ namespace moodz::parameters
 
     // Parameter version passed to juce::ParameterID, incremented with every addition:
     // 1 = gainOut (task 0003), 2 = filterModel, cutoff, resonance (task 0008).
+    // A parameter keeps the version it was added with.
     inline constexpr int version = 2;
 
     juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
@@ -31,7 +32,7 @@ namespace moodz::parameters
 
     static_assert (std::atomic<float>::is_always_lock_free, "the audio thread reads parameters through std::atomic<float>");
 
-    // Model index from the raw choice value, always within the candidate list: NaN, infinity
+    // Model index from the raw choice value, always within the filter list: NaN, infinity
     // and out-of-range values are bounded in float before the conversion to int.
     int toModelIndex (float rawValue) noexcept;
 
