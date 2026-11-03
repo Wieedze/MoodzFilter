@@ -50,7 +50,7 @@ namespace moodz::dsp
         {
             // Warm up: the first coefficient computation fills sst-filters' shared pitch table
             // (TuningProvider::twoToThe, about 1 000 pow calls). Do it here, off the audio thread.
-            filter.makeCoefficients (0, hertzToNote (cutoffHz), resonance);
+            filter.makeCoefficients (0, hertzToNote (cutoffHz), resonance, extra);
         }
         filter.init();
         // Clears what the warm-up left in the coefficient smoothing, so the first render after
@@ -82,6 +82,13 @@ namespace moodz::dsp
         resonance = std::clamp (amount, 0.0f, 1.0f);
     }
 
+    void MultimodeFilter::setExtra (float amount) noexcept MOODZ_NONBLOCKING
+    {
+        if (!std::isfinite (amount))
+            return;
+        extra = std::clamp (amount, 0.0f, 1.0f);
+    }
+
     void MultimodeFilter::process (std::span<const std::span<float>> channels, int numSamples) noexcept MOODZ_NONBLOCKING
     {
         if (!ready || channels.empty())
@@ -103,12 +110,12 @@ namespace moodz::dsp
                 // Called on every packet, even with unchanged parameters, on purpose: each call
                 // moves sst-filters' target coefficients 20 % of the way to the new ones
                 // (tC = 0.8 tC + 0.2 N, FilterCoefficientMaker_Impl.h:865 at 87a171b) and ramps
-                // linearly across the packet. That is the smoothing of cutoff and resonance
+                // linearly across the packet. That is the smoothing of cutoff, resonance and extra
                 // (.claude/rules/dsp.md); skipping calls would freeze them half way. API contract:
                 // "must be called every block before prepareBlock" (filters++/api.h:205).
                 // Clamped here, where it is used: the rate may have changed since setCutoffHz
                 const float hz = std::min (cutoffHz, nyquistGuardHz);
-                filter.makeCoefficients (0, hertzToNote (hz), resonance);
+                filter.makeCoefficients (0, hertzToNote (hz), resonance, extra);
                 filter.copyCoefficientsFromVoiceToVoice (0, 1);
                 filter.prepareBlock();
             }

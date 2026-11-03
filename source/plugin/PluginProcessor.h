@@ -53,7 +53,7 @@ private:
     // One prepared filter per entry of the filter list: processBlock only selects one, so
     // switching the model never allocates or calls prepareInstance on the audio thread
     // (tasks 0008, 0009).
-    std::array<moodz::dsp::MultimodeFilter, moodz::dsp::filterSetupCount> filters;
+    std::array<moodz::dsp::MultimodeFilter, moodz::dsp::filterVariantCount> filters;
     std::size_t currentFilter = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginProcessor)
