@@ -65,6 +65,8 @@ Unless stated, the signal is a sine at −12 dBFS, 48 kHz, blocks of 512, cutoff
 * [x] `GLOSSARY.md` updated (Filter candidate, Filter list, Filter setup, Passband).
 * [x] Maxime, first version (`8c85445`, 5 models and Mode): conforming in Live, 2026-11-03 14:10 CET.
 * [x] **Maxime: the CI installer loads in Live; Model shows the 9 entries in order, each one sounds like its name.** 2026-11-03 14:29 CET, installer `MoodzFilter-0.0.1-Windows.exe` from CI run 41643513241 (f9cb1d7): everything works.
-* [ ] `task-verifier`: pass. Post-mortem written, `STATE.md` updated.
+* [x] `task-verifier`: pass. Post-mortem written, `STATE.md` updated.
 
 ## End note (filled by the task-verifier)
+
+Pass on 2026-11-03, first round, judged against the rescoped task and ADR 0007. On c086c78 (Debug, GCC, WSL2): `ctest` 50/50, `check` green, `render` then `compare` green with max error 0, `git clang-format --diff main` clean, no change in `tests/golden/`. Every measurement command of the Expected behaviour table reprinted the figures of its row (HP 100 Hz −40.12 dB; band pass 14.14 and 15.41 dB; notch −122.5 dB at 1 kHz; K35 HP 20.10 dB; largest peak 2.59). CI run 41643513241 on f9cb1d7: Linux and Windows (Release, pluginval 10 `SUCCESS`) and Linux RealtimeSanitizer green. Every row is covered by a test with its tolerance; no parameter added, `filterMode` removed before any release. Non-blocking points: the dsp tests' `candidate` variables and an ADR citation, fixed at close; a removed `filterMode` value lingering in loaded states, logged in `FUTURE.md`; the state tests build their XML by hand, acceptable until the first release puts state files in `tests/plugin/states/`. Post-mortem: playbook `docs/plugins/moodzfilter/learning/0009-five-models-mode.md`.
