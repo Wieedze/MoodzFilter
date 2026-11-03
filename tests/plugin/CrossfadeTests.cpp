@@ -84,7 +84,7 @@ namespace
 
     // Measured before the crossfade (task 0011 red run): 0.208 Cytomic SVF to Diode, 0.128 Vintage
     // to K35, 0.091 Diode slope step, 0.106 Vintage variant, 0.151 slope wobble. With it: 0.00036,
-    // 0.00025, 0.00015, 0.00016, 0.00022, against about 0.00017 for the sine alone. The bound is
+    // 0.00025, 0.00015, 0.00016, 0.00026, against about 0.00017 for the sine alone. The bound is
     // more than 90 times under the smallest red value (commands in each test).
     constexpr double maximumClick = 0.001;
 }
