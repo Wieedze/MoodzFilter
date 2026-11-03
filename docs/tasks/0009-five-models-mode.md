@@ -57,14 +57,14 @@ Unless stated, the signal is a sine at −12 dBFS, 48 kHz, blocks of 512, cutoff
 
 ## Definition of done
 
-* [ ] Tests written before the code, red then green (first version: compile red, then behaviour red with the mapping broken on purpose, 3 of 12 filter cases failing; rescope: see the closing commit).
-* [ ] Debug, Release, RTSan (CI): no new warning, `ctest` green.
-* [ ] `check` green; `compare` green against the current references, no `golden:` commit.
-* [ ] pluginval 10 green (CI).
+* [x] Tests written before the code, red then green (first version 8c85445: compile red, then behaviour red with the mapping broken on purpose, 3 of 12 filter cases failing; rescope 3232c5d: 6 of 22 plugin cases red before the code).
+* [x] Debug, Release, RTSan: `ctest` green. Locally on f9cb1d7 (Debug, GCC, WSL2): 50/50. CI run 41643513241 on f9cb1d7: Linux and Windows (Release) and Linux RealtimeSanitizer (Debug, clang 20) green.
+* [x] `check` green (`check: all passed`); `compare` green against the current references (`compare: all files within tolerance`, max error 0), no `golden:` commit, `tests/golden/` untouched.
+* [x] pluginval 10 green (CI run 41643513241: Pluginval step success on Windows and Linux).
 * [x] `rt-safety-reviewer` passed (first version 8c85445: no finding; rescoped 3232c5d: no real-time violation, 1 low point, the local index bound removed with Mode, restored in the next commit).
-* [ ] `GLOSSARY.md` updated (Filter candidate, Filter list, Filter setup, Passband).
+* [x] `GLOSSARY.md` updated (Filter candidate, Filter list, Filter setup, Passband).
 * [x] Maxime, first version (`8c85445`, 5 models and Mode): conforming in Live, 2026-11-03 14:10 CET.
-* [ ] **Maxime: the CI installer loads in Live; Model shows the 9 entries in order, each one sounds like its name.**
+* [x] **Maxime: the CI installer loads in Live; Model shows the 9 entries in order, each one sounds like its name.** 2026-11-03 14:29 CET, installer `MoodzFilter-0.0.1-Windows.exe` from CI run 41643513241 (f9cb1d7): everything works.
 * [ ] `task-verifier`: pass. Post-mortem written, `STATE.md` updated.
 
 ## End note (filled by the task-verifier)
