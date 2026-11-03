@@ -42,9 +42,9 @@ Maxime chooses the 4 filter models by ear in Ableton Live, on his own music, ins
 
 * [x] Tests written first, seen red (plugin: 6 of 14 failing; model index invariant: did not compile before `toModelIndex`).
 * [x] Debug, Release, RTSan: 0 warnings, `ctest` green (42, 42, 43 with the canary), `check` green, `compare` green after the `golden:` commit (ac02387).
-* [ ] pluginval 10 green (SUCCESS, Release on f1fe643), `rt-safety-reviewer` passed (no blocking finding; model index bounded in the snapshot and DSP setters marked nonblocking in f1fe643), CI green.
+* [x] pluginval 10 green (SUCCESS, Release on f1fe643; CI run 41593592904 on 5679f43: Pluginval step success on Windows and Linux), `rt-safety-reviewer` passed (no blocking finding; model index bounded in the snapshot and DSP setters marked nonblocking in f1fe643), CI green (run 41593592904 on 5679f43: Linux, Windows, Linux RealtimeSanitizer success).
 * [x] GLOSSARY checked before the verifier (Filter model, Filter candidate already defined; no new term).
-* [ ] **Maxime: the build loads in Live, the 7 models can be switched and heard; golden change accepted.**
+* [x] **Maxime: the build loads in Live, the 7 models can be switched and heard; golden change accepted.** 2026-11-03 09:43 CET, installer `MoodzFilter-0.0.1-Windows.exe` from CI run 41593592904 (5679f43): all 7 low pass candidates work in Live. Models kept: Diode Ladder 24 dB, K35, Vintage Ladder, Cytomic SVF, OB-Xd 4-pole 24 dB. That is 5, not the 4 of the SPEC: Maxime chose to keep 5, so task 0009 starts with the SPEC change (grill, ADR, amended SPEC). He also asks for a user-selectable slope on every model that has one (`FUTURE.md`). Golden change of ac02387 accepted after listening to the renders of that run, 2026-11-03 09:43 CET.
 * [ ] `task-verifier`: pass.
 
 ## End note (filled by the task-verifier)
