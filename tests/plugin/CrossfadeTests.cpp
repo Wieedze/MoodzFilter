@@ -115,6 +115,23 @@ TEST_CASE ("A Vintage variant change does not click", "[plugin][crossfade]")
     CHECK (measure < maximumClick);
 }
 
+TEST_CASE ("An Oversampling change does not click", "[plugin][crossfade][oversampling]")
+{
+    // SPEC success criterion 3, task 0012. Click measures printed by:
+    // ./Builds/PluginTests "An Oversampling change does not click" -s | grep "click"
+    // A one sample crossfade gave 0.040, 0.043, 0.031. With 20 ms: 0.0016, 0.0017, 0.0012, above
+    // the Model change because the incoming path starts empty (its filters and its oversampler).
+    // The bound is more than 15 times under the smallest red value.
+    constexpr double maximumOversamplingClick = 0.002;
+    const auto offTo2x = clickMeasure (change ("oversampling", 0.0f, 1.0f));
+    const auto twoTo4x = clickMeasure (change ("oversampling", 1.0f, 2.0f));
+    const auto fourToOff = clickMeasure (change ("oversampling", 2.0f, 0.0f));
+    SUCCEED ("click Off to 2x " << offTo2x << ", 2x to 4x " << twoTo4x << ", 4x to Off " << fourToOff);
+    CHECK (offTo2x < maximumOversamplingClick);
+    CHECK (twoTo4x < maximumOversamplingClick);
+    CHECK (fourToOff < maximumOversamplingClick);
+}
+
 TEST_CASE ("A Diode slope wobbling across a step does not click", "[plugin][crossfade]")
 {
     // Slope alternating 14.9 and 15.1 dB on every block from changeBlock on, for 1 s: every

@@ -1,6 +1,7 @@
 #include "plugin/Parameters.h"
 
 #include "dsp/FilterModels.h"
+#include "dsp/Oversampler.h"
 #include "dsp/SmoothedGain.h"
 
 namespace moodz::parameters
@@ -64,6 +65,11 @@ namespace moodz::parameters
     int toVintageVariantIndex (float rawValue) noexcept
     {
         return toChoiceIndex (rawValue, dsp::vintageVariantLabels.size());
+    }
+
+    int toOversamplingIndex (float rawValue) noexcept
+    {
+        return toChoiceIndex (rawValue, dsp::Oversampler::factorCount);
     }
 
     juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
@@ -140,6 +146,10 @@ namespace moodz::parameters
         layout.add (std::make_unique<juce::AudioParameterChoice> (
             juce::ParameterID { id::vintageVariant, version::task0010 }, "Vintage variant", variantNames, dsp::defaultVintageVariant));
 
+        // SPEC, ADR 0009: Off, 2x, 4x around the filter, default 2x. One latency for the three.
+        layout.add (std::make_unique<juce::AudioParameterChoice> (
+            juce::ParameterID { id::oversampling, version::task0012 }, "Oversampling", juce::StringArray { "Off", "2x", "4x" }, 1));
+
         return layout;
     }
 
@@ -150,10 +160,11 @@ namespace moodz::parameters
           resonance (state.getRawParameterValue (id::resonance)),
           slope (state.getRawParameterValue (id::slope)),
           k35Saturation (state.getRawParameterValue (id::k35Saturation)),
-          vintageVariant (state.getRawParameterValue (id::vintageVariant))
+          vintageVariant (state.getRawParameterValue (id::vintageVariant)),
+          oversampling (state.getRawParameterValue (id::oversampling))
     {
         jassert (gainOut != nullptr && filterModel != nullptr && cutoff != nullptr && resonance != nullptr);
-        jassert (slope != nullptr && k35Saturation != nullptr && vintageVariant != nullptr);
+        jassert (slope != nullptr && k35Saturation != nullptr && vintageVariant != nullptr && oversampling != nullptr);
     }
 
     Params Snapshotter::snapshot() const noexcept
@@ -167,6 +178,7 @@ namespace moodz::parameters
             slope->load (relaxed),
             k35Saturation->load (relaxed) / 100.0f,
             toVintageVariantIndex (vintageVariant->load (relaxed)),
+            toOversamplingIndex (oversampling->load (relaxed)),
         };
     }
 }

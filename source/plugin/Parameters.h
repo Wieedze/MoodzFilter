@@ -18,6 +18,7 @@ namespace moodz::parameters
         inline constexpr const char* slope = "slope";
         inline constexpr const char* k35Saturation = "k35Saturation";
         inline constexpr const char* vintageVariant = "vintageVariant";
+        inline constexpr const char* oversampling = "oversampling";
     }
 
     // Parameter versions passed to juce::ParameterID, one per wave of additions; the next wave
@@ -27,6 +28,7 @@ namespace moodz::parameters
         inline constexpr int task0003 = 1; // gainOut
         inline constexpr int task0008 = 2; // filterModel, cutoff, resonance
         inline constexpr int task0010 = 3; // slope, k35Saturation, vintageVariant
+        inline constexpr int task0012 = 4; // oversampling
     }
 
     juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
@@ -49,6 +51,8 @@ namespace moodz::parameters
     int toModelIndex (float rawValue) noexcept;
     // Same for the Vintage variant list
     int toVintageVariantIndex (float rawValue) noexcept;
+    // Same for the Oversampling list
+    int toOversamplingIndex (float rawValue) noexcept;
 
     // Plain copy of the parameter values, taken at the start of each block.
     // The dsp layer reads only this, never the APVTS.
@@ -61,6 +65,7 @@ namespace moodz::parameters
         float slopeDb = dsp::maxSlopeDb;
         float k35Saturation = dsp::defaultK35Saturation; // 0..1, from the 0..100 % parameter
         int vintageVariant = dsp::defaultVintageVariant;
+        int oversampling = 1; // 0 Off, 1 2x, 2 4x
     };
 
     // Raw atomic values, looked up once so that a snapshot needs no string lookup.
@@ -78,5 +83,6 @@ namespace moodz::parameters
         const std::atomic<float>* slope;
         const std::atomic<float>* k35Saturation;
         const std::atomic<float>* vintageVariant;
+        const std::atomic<float>* oversampling;
     };
 }

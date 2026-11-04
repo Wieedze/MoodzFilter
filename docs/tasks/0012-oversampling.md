@@ -16,12 +16,12 @@ Unless stated: 48 kHz, stereo, blocks of 512. The **click measure** is the one o
 | --- | --- | --- | --- |
 | Oversampler round trip 2x and 4x, sines at 1, 10 and 18 kHz, −12 dBFS | gain 0 dB | ± 0.1 dB | ADR 0009; below 0.43 × the rate (20.6 kHz here), the pass band of `Oversampler2xFIR` |
 | Oversampler round trip, impulse | peak exactly at the stage's reported latency, a whole number of samples | exact | ADR 0009 |
-| Oversampler up then down, 2x, tone above the pass band at the high rate (36 kHz at 96 kHz) | attenuated by the down stage | at least 40 dB, to refine from the run | `.claude/rules/dsp.md`, anti-aliasing |
+| Oversampler up then down, 2x, tone above the pass band at the high rate (36 kHz at 96 kHz) | attenuated by the down stage | at most −80 dB (run: −84.3 dB) | `.claude/rules/dsp.md`, anti-aliasing |
 | `getLatencySamples()` at Off, 2x, 4x and at 44.1, 48, 96 kHz | the same value, equal to the 4x chain latency | exact | ADR 0009 |
 | Off, 2x, 4x, Cytomic SVF Low-pass, cutoff 20 kHz, resonance 0, impulse | peak of the output at the reported latency in the 3 settings | ± 1 sample | ADR 0009 |
-| Off, 2x, 4x, Cytomic SVF Low-pass, cutoff 1 kHz, resonance 20 %, sines at 500 Hz, 1 kHz and 4 kHz | same response between settings | ± 0.5 dB, to refine from the run | SPEC signal chain (the cutoff does not move with the factor) |
+| Off, 2x, 4x, Cytomic SVF Low-pass, cutoff 1 kHz, resonance 20 %, sines at 500 Hz, 1 kHz and 4 kHz | same response between settings | ± 0.5 dB (run: largest 0.35 dB, 4 kHz at 4x) | SPEC signal chain (the cutoff does not move with the factor) |
 | Every filter variant at 4x, extra 0 and 1, resonance 100 %, noise | every sample finite | exact | `.claude/rules/dsp.md` |
-| Oversampling change Off to 2x, 2x to 4x, 4x to Off at a block boundary, 200 Hz sine, cutoff 5 kHz | click measure under a bound set from the run | at least 10 times under the red run | SPEC success criterion 3 |
+| Oversampling change Off to 2x, 2x to 4x, 4x to Off at a block boundary, 200 Hz sine, cutoff 5 kHz | click measure under 0.002 (run: 0.0012 to 0.0017) | more than 15 times under the one sample crossfade (0.031 to 0.043) | SPEC success criterion 3 |
 | Same change, outgoing chain's contribution | 0 from 20 ms after the change | ± 1 sample | same ramp time as task 0011 |
 | Oversampling and Model changed on every block through all values, 2 s of noise, resonance 100 % | every sample finite; RTSan build: no report | exact | `.claude/rules/realtime-audio.md` |
 | Chain, block sizes 1, 7, 64, 480, 512, 2048, a factor change and a Model change | identical output whatever the block size | 1e-6 | `.claude/rules/dsp.md` |
@@ -43,6 +43,7 @@ Unless stated: 48 kHz, stereo, blocks of 512. The **click measure** is the one o
 * Each factor owns one crossfading filter bank prepared at its rate, its stages and its delay to the common latency. A factor change resets the incoming chain and crossfades the two chains' aligned outputs linearly over 20 ms; a change during a crossfade waits for it to end, as in task 0011.
 * Blocks are split in fixed internal chunks, so no allocation depends on the host's block size.
 * Coefficient smoothing in sst-filters runs per packet, so it runs faster at a higher factor. To check at the listening; a bound is measured on the response only.
+* `WholeSampleDelay` is own code: Signalsmith's delay classes bring interpolation and resizing that a fixed whole-sample delay does not need.
 * The cost of 4x, and of two chains during a crossfade, is measured at gate 2.
 
 ## Rules to load

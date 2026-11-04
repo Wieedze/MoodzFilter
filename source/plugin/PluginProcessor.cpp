@@ -11,7 +11,9 @@ PluginProcessor::PluginProcessor()
                      #endif
                        )
 {
-    // The filter bank configures every filter variant in its constructor, off the audio thread
+    // The filter banks configure every filter variant in their constructors, off the audio thread.
+    // One latency at every Oversampling setting, known before the host prepares us (ADR 0009).
+    setLatencySamples (moodz::dsp::OversampledFilterChain::latencySamples);
 }
 
 PluginProcessor::~PluginProcessor()
@@ -87,15 +89,17 @@ void PluginProcessor::changeProgramName (int index, const juce::String& newName)
 //==============================================================================
 void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
+    bypassDelay.prepare (moodz::dsp::OversampledFilterChain::latencySamples);
     gainOut.prepare (sampleRate, samplesPerBlock);
     // Start at the current parameter value, without a ramp from the default
     const auto params = snapshotter.snapshot();
     gainOut.setTargetDb (params.gainOutDb);
     gainOut.reset();
 
-    // Start on the current choice, without a crossfade from the default
+    // Start on the current choice and factor, without a crossfade from the default
     filters.setCutoffHz (params.cutoffHz);
     filters.setResonance (params.resonance);
+    filters.setFactorIndex (params.oversampling);
     filters.select (moodz::dsp::chooseFilter (params.filterModel, params.slopeDb, params.vintageVariant, params.k35Saturation));
     filters.prepare (sampleRate, samplesPerBlock);
 }
@@ -158,6 +162,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     // The Model entry and its settings select a filter variant (ADR 0008); a new variant
     // crossfades in over 20 ms (task 0011). chooseFilter and the bank both bound the index.
     filters.select (moodz::dsp::chooseFilter (params.filterModel, params.slopeDb, params.vintageVariant, params.k35Saturation));
+    filters.setFactorIndex (params.oversampling);
     filters.setCutoffHz (params.cutoffHz);
     filters.setResonance (params.resonance);
 
@@ -172,6 +177,19 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     const std::span<const std::span<float>> active { channels.data(), static_cast<size_t> (numChannels) };
     filters.process (active, numSamples);
     gainOut.process (active, numSamples);
+}
+
+void PluginProcessor::processBlockBypassed (juce::AudioBuffer<float>& buffer,
+    juce::MidiBuffer& midiMessages) noexcept MOODZ_NONBLOCKING
+{
+    juce::ignoreUnused (midiMessages);
+
+    const auto numSamples = buffer.getNumSamples();
+    const auto numChannels = std::min ({ getTotalNumOutputChannels(), buffer.getNumChannels(), 2 });
+    std::array<std::span<float>, 2> channels {};
+    for (int channel = 0; channel < numChannels; ++channel)
+        channels[static_cast<size_t> (channel)] = { buffer.getWritePointer (channel), static_cast<size_t> (numSamples) };
+    bypassDelay.process ({ channels.data(), static_cast<size_t> (numChannels) }, numSamples);
 }
 
 //==============================================================================
