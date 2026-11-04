@@ -11,14 +11,7 @@ PluginProcessor::PluginProcessor()
                      #endif
                        )
 {
-    // Off the audio thread: configure every filter variant once (sst-filters' prepareInstance
-    // allocates on first use)
-    const auto variants = moodz::dsp::filterVariants();
-    for (size_t i = 0; i < filters.size(); ++i)
-    {
-        [[maybe_unused]] const bool valid = filters[i].configure (variants[i]);
-        jassert (valid);
-    }
+    // The filter bank configures every filter variant in its constructor, off the audio thread
 }
 
 PluginProcessor::~PluginProcessor()
@@ -100,15 +93,11 @@ void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     gainOut.setTargetDb (params.gainOutDb);
     gainOut.reset();
 
-    const auto choice = moodz::dsp::chooseFilter (params.filterModel, params.slopeDb, params.vintageVariant, params.k35Saturation);
-    for (auto& filter : filters)
-    {
-        filter.prepare (sampleRate, samplesPerBlock);
-        filter.setCutoffHz (params.cutoffHz);
-        filter.setResonance (params.resonance);
-        filter.setExtra (choice.extra);
-    }
-    currentFilter = std::min (choice.variant, filters.size() - 1);
+    // Start on the current choice, without a crossfade from the default
+    filters.setCutoffHz (params.cutoffHz);
+    filters.setResonance (params.resonance);
+    filters.select (moodz::dsp::chooseFilter (params.filterModel, params.slopeDb, params.vintageVariant, params.k35Saturation));
+    filters.prepare (sampleRate, samplesPerBlock);
 }
 
 void PluginProcessor::releaseResources()
@@ -166,22 +155,11 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     const auto params = snapshotter.snapshot();
     gainOut.setTargetDb (params.gainOutDb);
 
-    // The Model entry and its settings select a filter variant (ADR 0008). A newly selected
-    // variant starts from a clean state (no crossfade yet: a click is possible on a Model change,
-    // a Diode slope step or a Vintage variant change, task 0010 out of scope). chooseFilter
-    // already bounds the index; the local bound keeps the array access safe whatever it returns
-    // (rt-safety review of task 0009).
-    const auto choice = moodz::dsp::chooseFilter (params.filterModel, params.slopeDb, params.vintageVariant, params.k35Saturation);
-    const auto selected = std::min (choice.variant, filters.size() - 1);
-    if (selected != currentFilter)
-    {
-        filters[selected].reset();
-        currentFilter = selected;
-    }
-    auto& filter = filters[currentFilter];
-    filter.setCutoffHz (params.cutoffHz);
-    filter.setResonance (params.resonance);
-    filter.setExtra (choice.extra);
+    // The Model entry and its settings select a filter variant (ADR 0008); a new variant
+    // crossfades in over 20 ms (task 0011). chooseFilter and the bank both bound the index.
+    filters.select (moodz::dsp::chooseFilter (params.filterModel, params.slopeDb, params.vintageVariant, params.k35Saturation));
+    filters.setCutoffHz (params.cutoffHz);
+    filters.setResonance (params.resonance);
 
     // Mono or stereo only (isBusesLayoutSupported), so two spans are enough
     const auto numSamples = buffer.getNumSamples();
@@ -192,7 +170,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
     // SPEC signal chain: filter, then gain out
     const std::span<const std::span<float>> active { channels.data(), static_cast<size_t> (numChannels) };
-    filter.process (active, numSamples);
+    filters.process (active, numSamples);
     gainOut.process (active, numSamples);
 }
 
