@@ -1,6 +1,7 @@
 #pragma once
 
 #include "dsp/FilterModels.h"
+#include "dsp/Oversampler.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
@@ -65,7 +66,7 @@ namespace moodz::parameters
         float slopeDb = dsp::maxSlopeDb;
         float k35Saturation = dsp::defaultK35Saturation; // 0..1, from the 0..100 % parameter
         int vintageVariant = dsp::defaultVintageVariant;
-        int oversampling = 1; // 0 Off, 1 2x, 2 4x
+        int oversampling = dsp::Oversampler::defaultFactorIndex;
     };
 
     // Raw atomic values, looked up once so that a snapshot needs no string lookup.

@@ -19,7 +19,9 @@ namespace moodz::dsp
         static constexpr int chunkSize = 256;
         // Round trip at 4x, the largest: the plugin's constant latency (ADR 0009)
         static constexpr int maxLatencySamples = 40;
-        static constexpr int factorCount = 3;
+        static constexpr std::array<const char*, 3> factorLabels { "Off", "2x", "4x" };
+        static constexpr int factorCount = static_cast<int> (factorLabels.size());
+        static constexpr int defaultFactorIndex = 1; // SPEC: 2x
 
         // Off the audio thread: index 0 Off, 1 2x, 2 4x, bounded. Allocates.
         void prepare (int factorIndex);

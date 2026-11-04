@@ -114,6 +114,30 @@ TEST_CASE ("The down stage rejects what would fold back", "[dsp][oversampling]")
     CHECK (db < -80.0);
 }
 
+TEST_CASE ("The 4x down stages reject what would fold back", "[dsp][oversampling]")
+{
+    // Code review of task 0012: the second stage has its own short kernel (source/dsp/Oversampler.cpp).
+    // Tones at the 192 kHz high rate, all above the 24 kHz base band. Bound from the run, -81.9 dB at worst:
+    // ./Builds/DspTests "The 4x down stages reject what would fold back" -s
+    for (double hz : { 30000.0, 36000.0, 60000.0, 72000.0, 84000.0 })
+    {
+        Oversampler oversampler;
+        oversampler.prepare (2);
+        const auto tone = sine (hz, 192000.0, 65536, 0.25f);
+        std::vector<float> silence (256, 0.0f), output, block (256);
+        for (size_t start = 0; start + 1024 <= tone.size(); start += 1024)
+        {
+            auto high = oversampler.up (0, silence);
+            std::copy_n (tone.begin() + static_cast<std::ptrdiff_t> (start), 1024, high.begin());
+            oversampler.down (0, block);
+            output.insert (output.end(), block.begin(), block.end());
+        }
+        const double db = 20.0 * std::log10 (rms (output, 256) / 0.25 * std::numbers::sqrt2);
+        INFO (hz << " Hz folded: " << db << " dB");
+        CHECK (db < -80.0);
+    }
+}
+
 TEST_CASE ("The oversampler does not depend on the chunk size", "[dsp][oversampling]")
 {
     const auto input = sine (3000.0, 48000.0, 4096, 0.25f);

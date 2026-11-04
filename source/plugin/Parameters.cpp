@@ -1,7 +1,6 @@
 #include "plugin/Parameters.h"
 
 #include "dsp/FilterModels.h"
-#include "dsp/Oversampler.h"
 #include "dsp/SmoothedGain.h"
 
 namespace moodz::parameters
@@ -69,7 +68,7 @@ namespace moodz::parameters
 
     int toOversamplingIndex (float rawValue) noexcept
     {
-        return toChoiceIndex (rawValue, dsp::Oversampler::factorCount);
+        return toChoiceIndex (rawValue, dsp::Oversampler::factorLabels.size());
     }
 
     juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
@@ -147,8 +146,11 @@ namespace moodz::parameters
             juce::ParameterID { id::vintageVariant, version::task0010 }, "Vintage variant", variantNames, dsp::defaultVintageVariant));
 
         // SPEC, ADR 0009: Off, 2x, 4x around the filter, default 2x. One latency for the three.
+        juce::StringArray factorNames;
+        for (const auto* label : dsp::Oversampler::factorLabels)
+            factorNames.add (label);
         layout.add (std::make_unique<juce::AudioParameterChoice> (
-            juce::ParameterID { id::oversampling, version::task0012 }, "Oversampling", juce::StringArray { "Off", "2x", "4x" }, 1));
+            juce::ParameterID { id::oversampling, version::task0012 }, "Oversampling", factorNames, dsp::Oversampler::defaultFactorIndex));
 
         return layout;
     }
