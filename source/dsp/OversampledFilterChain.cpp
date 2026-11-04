@@ -125,11 +125,13 @@ namespace moodz::dsp
 
             if (crossfading)
             {
-                // Equal gain, as in CrossfadingFilterBank: the two aligned paths filter the same input
-                const float step = 1.0f / static_cast<float> (crossfadeLength);
+                // Equal gain, as in CrossfadingFilterBank: the two aligned paths filter the same
+                // input. 0 during the pre-roll, then the ramp over the rest of the crossfade.
+                const int preRoll = std::min (preRollSamples, crossfadeLength - 1);
+                const float step = 1.0f / static_cast<float> (crossfadeLength - preRoll);
                 for (std::size_t i = 0; i < size; ++i)
                 {
-                    const float gain = static_cast<float> (crossfadePosition + static_cast<int> (i)) * step;
+                    const float gain = static_cast<float> (std::max (crossfadePosition + static_cast<int> (i) - preRoll, 0)) * step;
                     for (std::size_t c = 0; c < numChannels; ++c)
                         incoming[c][i] = incoming[c][i] * gain + fading[c][i] * (1.0f - gain);
                 }

@@ -13,13 +13,16 @@ namespace moodz::dsp
 {
     // The filter at 1x, 2x or 4x (task 0012, ADR 0009). Each factor owns a crossfading filter
     // bank prepared at its rate, its oversampler and a delay that completes it to the constant
-    // latency. A factor change resets the incoming path and crossfades the two aligned outputs
-    // linearly over crossfadeSeconds; a change during a crossfade waits for it to end.
+    // latency. A factor change resets the incoming path, lets it settle unheard for preRollSamples
+    // (it starts empty, and its start transient would click), then crossfades the two aligned
+    // outputs linearly, all within crossfadeSeconds; a change during a crossfade waits for it to end.
     class OversampledFilterChain
     {
     public:
         static constexpr int latencySamples = Oversampler::maxLatencySamples;
         static constexpr double crossfadeSeconds = CrossfadingFilterBank::crossfadeSeconds;
+        // Twice the latency: the signal reaches the output, then the FIR's own ringing is over
+        static constexpr int preRollSamples = 2 * latencySamples;
 
         void prepare (double sampleRate, int maxBlockSize);
         // Jumps to the selected factor and choice: no crossfade, everything cleared.

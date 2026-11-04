@@ -3,6 +3,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <functional>
 #include <numbers>
@@ -34,7 +35,7 @@ namespace
     // Click measure (task 0011): the largest |y[n] - 2 y[n-1] + y[n-2]| of the left output over
     // the window after the change (default 50 ms, 2400 samples), on a 200 Hz sine at -12 dBFS, cutoff 5 kHz,
     // resonance 20 %. onBlock sets the parameters before each block (block index given).
-    double clickMeasure (const std::function<void (PluginProcessor&, int)>& onBlock, int blocks = changeBlock + 6, int window = 2400)
+    double clickMeasure (const std::function<void (PluginProcessor&, int)>& onBlock, int blocks = changeBlock + 6, int window = 2400, float peak = 0.25f)
     {
         PluginProcessor processor;
         set (processor, "cutoff", 5000.0f);
@@ -52,7 +53,7 @@ namespace
             onBlock (processor, block);
             for (int channel = 0; channel < 2; ++channel)
                 for (int i = 0; i < blockSize; ++i)
-                    buffer.setSample (channel, i, 0.25f * static_cast<float> (std::sin (2.0 * std::numbers::pi * 200.0 * (block * blockSize + i) / 48000.0)));
+                    buffer.setSample (channel, i, peak * static_cast<float> (std::sin (2.0 * std::numbers::pi * 200.0 * (block * blockSize + i) / 48000.0)));
             processor.processBlock (buffer, midi);
             for (int i = 0; i < blockSize; ++i)
             {
@@ -119,10 +120,9 @@ TEST_CASE ("An Oversampling change does not click", "[plugin][crossfade][oversam
 {
     // SPEC success criterion 3, task 0012. Click measures printed by:
     // ./Builds/PluginTests "An Oversampling change does not click" -s | grep "click"
-    // A one sample crossfade gave 0.040, 0.043, 0.031. With 20 ms: 0.0016, 0.0017, 0.0012, above
-    // the Model change because the incoming path starts empty (its filters and its oversampler).
-    // The bound is more than 15 times under the smallest red value.
-    constexpr double maximumOversamplingClick = 0.002;
+    // A one sample crossfade gave 0.040, 0.043, 0.031; 20 ms without the pre-roll 0.0016, 0.0017,
+    // 0.0012; with it 0.00017, the sine alone. The bound stays close to that.
+    constexpr double maximumOversamplingClick = 0.00025;
     const auto offTo2x = clickMeasure (change ("oversampling", 0.0f, 1.0f));
     const auto twoTo4x = clickMeasure (change ("oversampling", 1.0f, 2.0f));
     const auto fourToOff = clickMeasure (change ("oversampling", 2.0f, 0.0f));
@@ -130,6 +130,23 @@ TEST_CASE ("An Oversampling change does not click", "[plugin][crossfade][oversam
     CHECK (offTo2x < maximumOversamplingClick);
     CHECK (twoTo4x < maximumOversamplingClick);
     CHECK (fourToOff < maximumOversamplingClick);
+}
+
+TEST_CASE ("An Oversampling change does not click with the filter wide open", "[plugin][crossfade][oversampling]")
+{
+    // Code review of task 0012: cutoff 20 kHz let the incoming path's cold start through, 0.0070 at
+    // -12 dBFS and 0.028 at 0 dBFS before the pre-roll. Sine at -12 and 0 dBFS. The sine alone gives
+    // about 1.7e-4 and 6.9e-4, and so does the change now. Click measures printed by:
+    // ./Builds/PluginTests "An Oversampling change does not click with the filter wide open" -s | grep "click"
+    auto wide = [] (PluginProcessor& p) { set (p, "cutoff", 20000.0f); };
+    for (float peak : { 0.25f, 1.0f })
+        for (auto [from, to] : { std::array<float, 2> { 0.0f, 1.0f }, { 1.0f, 2.0f }, { 2.0f, 0.0f } })
+        {
+            const auto measure = clickMeasure (change ("oversampling", from, to, wide), changeBlock + 6, 2400, peak);
+            SUCCEED ("click peak " << peak << ", setting " << from << " to " << to << ": " << measure);
+            // Nothing stands out of the signal's own curve: at most 20 % above the sine alone
+            CHECK (measure < 1.2 * 6.9e-4 * peak);
+        }
 }
 
 TEST_CASE ("A Diode slope wobbling across a step does not click", "[plugin][crossfade]")
