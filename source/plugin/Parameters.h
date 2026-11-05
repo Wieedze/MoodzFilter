@@ -2,7 +2,9 @@
 
 #include "dsp/FilterModels.h"
 #include "dsp/InputDrive.h"
+#include "dsp/OversampledFilterChain.h"
 #include "dsp/Oversampler.h"
+#include "dsp/SyncedLfo.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
@@ -23,6 +25,9 @@ namespace moodz::parameters
         inline constexpr const char* oversampling = "oversampling";
         inline constexpr const char* drive = "drive";
         inline constexpr const char* driveCurve = "driveCurve";
+        inline constexpr const char* lfoShape = "lfoShape";
+        inline constexpr const char* lfoRate = "lfoRate";
+        inline constexpr const char* lfoDepth = "lfoDepth";
     }
 
     // Parameter versions passed to juce::ParameterID, one per wave of additions; the next wave
@@ -34,6 +39,7 @@ namespace moodz::parameters
         inline constexpr int task0010 = 3; // slope, k35Saturation, vintageVariant
         inline constexpr int task0012 = 4; // oversampling
         inline constexpr int task0013 = 5; // drive, driveCurve
+        inline constexpr int task0015 = 6; // lfoShape, lfoRate, lfoDepth
     }
 
     juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
@@ -45,6 +51,9 @@ namespace moodz::parameters
     // Display of frequencies: "440 Hz" below 1 kHz, "1.00 kHz" above
     juce::String hertzToText (float hz);
     float textToHertz (const juce::String& text);
+
+    // Display of the LFO depth: "+1.50 oct", "-2.00 oct", "0.00 oct"
+    juce::String octavesToText (float octaves);
 
     // Display of the slope: "24 dB/oct", "12.5 dB/oct"
     juce::String slopeToText (float db);
@@ -60,6 +69,9 @@ namespace moodz::parameters
     int toOversamplingIndex (float rawValue) noexcept;
     // Same for the Drive curve list
     int toDriveCurveIndex (float rawValue) noexcept;
+    // Same for the LFO shape and rate lists
+    int toLfoShapeIndex (float rawValue) noexcept;
+    int toLfoRateIndex (float rawValue) noexcept;
 
     // Plain copy of the parameter values, taken at the start of each block.
     // The dsp layer reads only this, never the APVTS.
@@ -75,6 +87,9 @@ namespace moodz::parameters
         int oversampling = dsp::Oversampler::defaultFactorIndex;
         float driveDb = dsp::InputDrive::minDb;
         int driveCurve = dsp::InputDrive::defaultCurveIndex;
+        int lfoShape = dsp::SyncedLfo::defaultShapeIndex;
+        int lfoRate = dsp::SyncedLfo::defaultRateIndex;
+        float lfoDepthOctaves = 0.0f;
     };
 
     // Raw atomic values, looked up once so that a snapshot needs no string lookup.
@@ -95,5 +110,8 @@ namespace moodz::parameters
         const std::atomic<float>* oversampling;
         const std::atomic<float>* drive;
         const std::atomic<float>* driveCurve;
+        const std::atomic<float>* lfoShape;
+        const std::atomic<float>* lfoRate;
+        const std::atomic<float>* lfoDepth;
     };
 }

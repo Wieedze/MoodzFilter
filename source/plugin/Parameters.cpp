@@ -76,6 +76,22 @@ namespace moodz::parameters
         return toChoiceIndex (rawValue, dsp::InputDrive::curveLabels.size());
     }
 
+    int toLfoShapeIndex (float rawValue) noexcept
+    {
+        return toChoiceIndex (rawValue, dsp::SyncedLfo::shapeLabels.size());
+    }
+
+    int toLfoRateIndex (float rawValue) noexcept
+    {
+        return toChoiceIndex (rawValue, dsp::SyncedLfo::rates.size());
+    }
+
+    juce::String octavesToText (float octaves)
+    {
+        const auto number = juce::String (octaves, 2);
+        return (octaves > 0.0f ? "+" : "") + number + " oct";
+    }
+
     juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
     {
         juce::AudioProcessorValueTreeState::ParameterLayout layout;
@@ -173,6 +189,29 @@ namespace moodz::parameters
         layout.add (std::make_unique<juce::AudioParameterChoice> (
             juce::ParameterID { id::driveCurve, version::task0013 }, "Drive curve", driveCurveNames, dsp::InputDrive::defaultCurveIndex));
 
+        // SPEC: LFO on the cutoff. Rates from 4 bars to 1/32 in a frozen order, default 1/4. Depth
+        // -4 to +4 octaves, default 0, smoothed in the dsp layer.
+        juce::StringArray lfoShapeNames;
+        for (const auto* label : dsp::SyncedLfo::shapeLabels)
+            lfoShapeNames.add (label);
+        layout.add (std::make_unique<juce::AudioParameterChoice> (
+            juce::ParameterID { id::lfoShape, version::task0015 }, "LFO shape", lfoShapeNames, dsp::SyncedLfo::defaultShapeIndex));
+
+        juce::StringArray lfoRateNames;
+        for (const auto& rate : dsp::SyncedLfo::rates)
+            lfoRateNames.add (rate.label);
+        layout.add (std::make_unique<juce::AudioParameterChoice> (
+            juce::ParameterID { id::lfoRate, version::task0015 }, "LFO rate", lfoRateNames, dsp::SyncedLfo::defaultRateIndex));
+
+        layout.add (std::make_unique<juce::AudioParameterFloat> (
+            juce::ParameterID { id::lfoDepth, version::task0015 },
+            "LFO depth",
+            juce::NormalisableRange<float> { -dsp::OversampledFilterChain::maxLfoDepthOctaves, dsp::OversampledFilterChain::maxLfoDepthOctaves, 0.01f },
+            0.0f,
+            juce::AudioParameterFloatAttributes {}
+                .withStringFromValueFunction ([] (float octaves, int) { return octavesToText (octaves); })
+                .withValueFromStringFunction ([] (const juce::String& text) { return text.trim().getFloatValue(); })));
+
         return layout;
     }
 
@@ -186,11 +225,15 @@ namespace moodz::parameters
           vintageVariant (state.getRawParameterValue (id::vintageVariant)),
           oversampling (state.getRawParameterValue (id::oversampling)),
           drive (state.getRawParameterValue (id::drive)),
-          driveCurve (state.getRawParameterValue (id::driveCurve))
+          driveCurve (state.getRawParameterValue (id::driveCurve)),
+          lfoShape (state.getRawParameterValue (id::lfoShape)),
+          lfoRate (state.getRawParameterValue (id::lfoRate)),
+          lfoDepth (state.getRawParameterValue (id::lfoDepth))
     {
         jassert (gainOut != nullptr && filterModel != nullptr && cutoff != nullptr && resonance != nullptr);
         jassert (slope != nullptr && k35Saturation != nullptr && vintageVariant != nullptr && oversampling != nullptr);
         jassert (drive != nullptr && driveCurve != nullptr);
+        jassert (lfoShape != nullptr && lfoRate != nullptr && lfoDepth != nullptr);
     }
 
     Params Snapshotter::snapshot() const noexcept
@@ -207,6 +250,9 @@ namespace moodz::parameters
             toOversamplingIndex (oversampling->load (relaxed)),
             drive->load (relaxed),
             toDriveCurveIndex (driveCurve->load (relaxed)),
+            toLfoShapeIndex (lfoShape->load (relaxed)),
+            toLfoRateIndex (lfoRate->load (relaxed)),
+            lfoDepth->load (relaxed),
         };
     }
 }

@@ -18,11 +18,24 @@ namespace moodz::dsp
             path.delay.prepare (latencySamples - path.oversampler.latencySamples());
         }
         crossfadeLength = std::max (1, static_cast<int> (std::lround (crossfadeSeconds * rate)));
+        lfo.prepare (rate, maxBlockSize);
+        const double gridSeconds = modulationGridSamples / rate;
+        // One-pole low-pass, sampled RC: y += (1 - exp (-T / tau)) (x - y), per step T of the grid
+        slewCoefficient = static_cast<float> (1.0 - std::exp (-gridSeconds / lfoSlewSeconds));
+        lfoDepthRampSteps = std::max (1, static_cast<int> (std::lround (lfoDepthRampSeconds / gridSeconds)));
         reset();
     }
 
     void OversampledFilterChain::reset() noexcept MOODZ_NONBLOCKING
     {
+        lfoDepth = lfoDepthTarget;
+        lfoDepthStep = 0.0f;
+        lfoDepthStepsLeft = 0;
+        gridPosition = 0;
+        lfo.reset();
+        slewedValue = lfo.value();
+        slewStartsOnNextProcess = true;
+        applyCutoff();
         current = outgoing = pending;
         startPath (current);
         crossfadePosition = crossfadeLength;
@@ -61,13 +74,76 @@ namespace moodz::dsp
         driveCurveIndex = index;
     }
 
+    void OversampledFilterChain::setLfoShapeIndex (int index) noexcept MOODZ_NONBLOCKING
+    {
+        lfo.setShapeIndex (index);
+    }
+
+    void OversampledFilterChain::setLfoRateIndex (int index) noexcept MOODZ_NONBLOCKING
+    {
+        lfo.setRateIndex (index);
+    }
+
+    void OversampledFilterChain::setLfoDepthOctaves (float octaves) noexcept MOODZ_NONBLOCKING
+    {
+        if (!std::isfinite (octaves))
+            return;
+        // Called every block: a ramp starts only when the target really changes
+        const float clamped = std::clamp (octaves, -maxLfoDepthOctaves, maxLfoDepthOctaves);
+        if (clamped == lfoDepthTarget)
+            return;
+        // Back from rest the slew starts on the LFO's value: it was not followed while nothing used it
+        if (!lfoIsActive())
+            slewedValue = lfo.value();
+        lfoDepthTarget = clamped;
+        lfoDepthStep = (lfoDepthTarget - lfoDepth) / static_cast<float> (lfoDepthRampSteps);
+        lfoDepthStepsLeft = lfoDepthRampSteps;
+    }
+
+    void OversampledFilterChain::setTempoBpm (double bpm) noexcept MOODZ_NONBLOCKING
+    {
+        lfo.setTempoBpm (bpm);
+    }
+
+    void OversampledFilterChain::syncLfoToPosition (double quarterNotes) noexcept MOODZ_NONBLOCKING
+    {
+        lfo.syncToPosition (quarterNotes);
+    }
+
+    float OversampledFilterChain::modulatedCutoffHz() const noexcept
+    {
+        return modulatedCutoff;
+    }
+
+    bool OversampledFilterChain::lfoIsActive() const noexcept
+    {
+        return lfoDepth != 0.0f || lfoDepthStepsLeft > 0;
+    }
+
+    void OversampledFilterChain::updateModulation() noexcept MOODZ_NONBLOCKING
+    {
+        if (lfoDepthStepsLeft > 0)
+        {
+            --lfoDepthStepsLeft;
+            lfoDepth = lfoDepthStepsLeft == 0 ? lfoDepthTarget : lfoDepth + lfoDepthStep;
+        }
+        slewedValue += slewCoefficient * (lfo.value() - slewedValue);
+        applyCutoff();
+    }
+
+    void OversampledFilterChain::applyCutoff() noexcept MOODZ_NONBLOCKING
+    {
+        // At depth 0 nothing is computed, so the cutoff is the parameter itself. An octave is a factor of 2.
+        modulatedCutoff = lfoDepth == 0.0f ? cutoffHz : cutoffHz * std::pow (2.0f, lfoDepth * slewedValue);
+    }
+
     void OversampledFilterChain::startPath (std::size_t index) noexcept MOODZ_NONBLOCKING
     {
         auto& path = paths[index];
         path.drive.setDriveDb (driveDb);
         path.drive.setCurveIndex (driveCurveIndex);
         path.drive.reset();
-        path.filters.setCutoffHz (cutoffHz);
+        path.filters.setCutoffHz (modulatedCutoff);
         path.filters.setResonance (resonance);
         path.filters.select (choice);
         path.filters.reset();
@@ -89,7 +165,7 @@ namespace moodz::dsp
         paths[current].filters.select (choice);
         for (auto index : { current, outgoing })
         {
-            paths[index].filters.setCutoffHz (cutoffHz);
+            paths[index].filters.setCutoffHz (modulatedCutoff);
             paths[index].filters.setResonance (resonance);
             paths[index].drive.setDriveDb (driveDb);
             paths[index].drive.setCurveIndex (driveCurveIndex);
@@ -127,14 +203,30 @@ namespace moodz::dsp
                     sample = 0.0f;
             }
 
+        if (slewStartsOnNextProcess && count > 0)
+        {
+            slewStartsOnNextProcess = false;
+            slewedValue = lfo.value();
+            applyCutoff();
+        }
+
         int start = 0;
         while (start < count)
         {
+            // At rest the blocks are not cut, and a cutoff change applies at once, as without an LFO
+            const bool modulating = lfoIsActive();
+            if (!modulating)
+                applyCutoff();
+            else if (gridPosition == 0)
+                updateModulation();
             // Also between chunks: a factor held during a crossfade starts the sample it ends,
             // so the output does not depend on the block size
             startPendingCrossfade();
             const bool crossfading = crossfadePosition < crossfadeLength;
             int length = std::min (Oversampler::chunkSize, count - start);
+            // Cut on the modulation grid, so the cutoff moves at the same samples whatever the block
+            if (modulating)
+                length = std::min (length, modulationGridSamples - gridPosition);
             if (crossfading)
                 length = std::min (length, crossfadeLength - crossfadePosition);
             const auto size = static_cast<std::size_t> (length);
@@ -165,6 +257,8 @@ namespace moodz::dsp
                 }
                 crossfadePosition += length;
             }
+            lfo.advance (length);
+            gridPosition = (gridPosition + length) % modulationGridSamples;
             start += length;
         }
     }

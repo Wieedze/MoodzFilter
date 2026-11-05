@@ -102,6 +102,9 @@ void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     filters.setFactorIndex (params.oversampling);
     filters.setDriveDb (params.driveDb);
     filters.setDriveCurveIndex (params.driveCurve);
+    filters.setLfoShapeIndex (params.lfoShape);
+    filters.setLfoRateIndex (params.lfoRate);
+    filters.setLfoDepthOctaves (params.lfoDepthOctaves);
     filters.select (moodz::dsp::chooseFilter (params.filterModel, params.slopeDb, params.vintageVariant, params.k35Saturation));
     filters.prepare (sampleRate, samplesPerBlock);
 }
@@ -169,6 +172,20 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     filters.setResonance (params.resonance);
     filters.setDriveDb (params.driveDb);
     filters.setDriveCurveIndex (params.driveCurve);
+    filters.setLfoShapeIndex (params.lfoShape);
+    filters.setLfoRateIndex (params.lfoRate);
+    filters.setLfoDepthOctaves (params.lfoDepthOctaves);
+
+    // While the host plays, the song position sets the LFO; otherwise it runs on, at the last tempo (task 0015)
+    if (const auto* host = getPlayHead())
+        if (const auto position = host->getPosition())
+        {
+            if (const auto bpm = position->getBpm())
+                filters.setTempoBpm (*bpm);
+            if (position->getIsPlaying())
+                if (const auto quarterNotes = position->getPpqPosition())
+                    filters.syncLfoToPosition (*quarterNotes);
+        }
 
     // Mono or stereo only (isBusesLayoutSupported), so two spans are enough
     const auto numSamples = buffer.getNumSamples();
