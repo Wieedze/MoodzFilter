@@ -118,6 +118,13 @@ namespace moodz::dsp
             available = std::min (available, channels[c].size());
         const int count = std::min (numSamples, static_cast<int> (std::min (available, static_cast<std::size_t> (std::numeric_limits<int>::max()))));
 
+        for (std::size_t c = 0; c < numChannels; ++c)
+            for (int i = 0; i < count; ++i)
+            {
+                auto& sample = channels[c][static_cast<std::size_t> (i)];
+                sample = std::isfinite (sample) ? std::clamp (sample, -maxInputSample, maxInputSample) : 0.0f;
+            }
+
         int start = 0;
         while (start < count)
         {

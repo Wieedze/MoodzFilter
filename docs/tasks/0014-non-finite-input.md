@@ -16,6 +16,7 @@ Unless stated: 48 kHz, blocks of 512. Every bound marked "to measure" comes from
 | --- | --- | --- | --- |
 | Chain, every filter variant, every factor, resonance 100 %, Drive 0 and 24 dB, noise with one NaN, +inf, -inf, ±3e38 or ±FLT_MAX at sample 1000 | every output sample finite, including the bad one's | exact | `.claude/rules/dsp.md`; red before: non-finite to the end of the render |
 | Same, Cytomic SVF Low-pass, 1 kHz, resonance 20 %, sine with one NaN | back to the output without the bad sample 100 ms later | to measure | The plugin plays on |
+| NaN, ±inf against 0; ±3e38 against ±256, noise, 2x | same output as with the replacement value | 1e-6 | Decision notes |
 | Stereo, bad sample on the left | right channel equal to its output without the bad sample | 1e-6 | SPEC (linked settings, separate signals) |
 | Every input sample within ±256 (+48 dBFS) | output identical with and without the guard: every golden reference unchanged | manifest tolerances | Legitimate hot signals are not touched |
 | Plugin, one NaN or +inf in `processBlock`, Gain out at silence and at 0 dB | every output sample finite after the latency | exact | FUTURE line from task 0006 |

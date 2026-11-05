@@ -24,6 +24,8 @@ namespace moodz::dsp
         static constexpr double crossfadeSeconds = CrossfadingFilterBank::crossfadeSeconds;
         // Twice the latency: the signal reaches the output, then the FIR's own ringing is over
         static constexpr int preRollSamples = 2 * latencySamples;
+        // +48 dBFS: far above any real signal, and the filters keep a finite state up to it (task 0014)
+        static constexpr float maxInputSample = 256.0f;
 
         void prepare (double sampleRate, int maxBlockSize);
         // Jumps to the selected factor and choice: no crossfade, everything cleared.
@@ -37,7 +39,9 @@ namespace moodz::dsp
         void setDriveDb (float db) noexcept MOODZ_NONBLOCKING;
         void setDriveCurveIndex (int index) noexcept MOODZ_NONBLOCKING;
 
-        // One or two channels; processes at most as many samples as the shortest span holds.
+        // One or two channels; processes at most as many samples as the shortest span holds. A
+        // non-finite input sample counts as 0, and one beyond maxInputSample is clamped to it, so one
+        // bad sample cannot leave the filter state non-finite.
         void process (std::span<const std::span<float>> channels, int numSamples) noexcept MOODZ_NONBLOCKING;
 
     private:
