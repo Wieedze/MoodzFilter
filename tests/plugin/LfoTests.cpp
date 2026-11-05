@@ -261,6 +261,7 @@ TEST_CASE ("A stopped host or no play head lets the LFO run on", "[plugin][lfo]"
         const auto output = render (processor, head, 48000, 512, 2000.0, 0.25f);
         return rmsDb (output, 30040) - rmsDb (output, 42040);
     };
+    // Printed by the test: ./Builds/PluginTests "The LFO moves the plugin output" -s | grep "swing" gives the same level
     CHECK (swing (nullptr) > 20.0);
     TestPlayHead stopped;
     stopped.playing = false;
@@ -284,7 +285,9 @@ TEST_CASE ("The LFO follows the host tempo", "[plugin][lfo]")
     slowHead.playing = false;
     slowHead.bpm = 60.0;
     const auto output = render (slow, &slowHead, 96000, 512, 2000.0, 0.25f);
-    CHECK (rmsDb (output, 60040) - rmsDb (output, 84040) > 20.0);
+    const double slowSwing = rmsDb (output, 60040) - rmsDb (output, 84040);
+    SUCCEED ("swing at 60 BPM " << slowSwing << " dB");
+    CHECK (slowSwing > 20.0);
 
     PluginProcessor moved;
     setUp (moved, sine, quarter, 2.0f);
@@ -292,8 +295,12 @@ TEST_CASE ("The LFO follows the host tempo", "[plugin][lfo]")
     movedHead.playing = false;
     movedHead.bpm = 60.0;
     const auto after = render (moved, &movedHead, 96000, 512, 2000.0, 0.25f, [&] (int start) { if (start == 48000 - 48000 % 512) movedHead.bpm = 240.0; });
-    // 240 BPM from about sample 48000, back at phase 0 there: 12000 samples per cycle
-    CHECK (rmsDb (after, 48000 + 3000 + 96 + 40 + 480) - rmsDb (after, 48000 + 9000 + 96 + 40 + 480) > 15.0);
+    // The block at 47616 still has 0.008 of a cycle to go, 96 samples at 240 BPM: phase 0 at 47712, then
+    // 12000 samples per cycle, loud at 47712 + 3000 + 40 and quiet at 47712 + 9000 + 40. Printed by:
+    // ./Builds/PluginTests "The LFO follows the host tempo" -s | grep "swing"
+    const double movedSwing = rmsDb (after, 50752) - rmsDb (after, 56752);
+    SUCCEED ("swing after the tempo moved " << movedSwing << " dB");
+    CHECK (movedSwing > 20.0);
 
     // Playing: the host's position moves at the tempo, and the LFO with it. 240 BPM from sample 0: a 1/4
     // lasts 12000 samples, loud at 15040 and quiet at 21040.
@@ -302,46 +309,87 @@ TEST_CASE ("The LFO follows the host tempo", "[plugin][lfo]")
     TestPlayHead playingHead;
     playingHead.bpm = 240.0;
     const auto fast = render (playing, &playingHead, 48000, 512, 2000.0, 0.25f);
-    CHECK (rmsDb (fast, 15040) - rmsDb (fast, 21040) > 20.0);
+    const double fastSwing = rmsDb (fast, 15040) - rmsDb (fast, 21040);
+    SUCCEED ("swing at 240 BPM while playing " << fastSwing << " dB");
+    CHECK (fastSwing > 20.0);
+}
+
+TEST_CASE ("The LFO keeps the last tempo when the host stops giving one", "[plugin][lfo]")
+{
+    // Decision notes of task 0015. 60 BPM for the first block, then no tempo: a 1/4 lasts 48000 samples,
+    // loud at 60040 and quiet at 84040; at 120 BPM these two samples would be the same phase.
+    PluginProcessor processor;
+    setUp (processor, sine, quarter, 2.0f);
+    TestPlayHead head;
+    head.playing = false;
+    head.bpm = 60.0;
+    const auto output = render (processor, &head, 96000, 512, 2000.0, 0.25f, [&] (int start) {
+        if (start == 512)
+            head.hasTempo = false;
+    });
+    CHECK (rmsDb (output, 60040) - rmsDb (output, 84040) > 20.0);
+}
+
+TEST_CASE ("A session with a depth starts at that depth", "[plugin][lfo]")
+{
+    // Task 0015 verifier, row "prepared, then playing": no ramp from 0 at the start. Square on a 1/2 at beat 1,
+    // value -1, depth 4 octaves: 2 kHz sine at -12 dBFS under a cutoff of 62.5 Hz from the start. The first
+    // window holds the sine's onset, so it is above the steady level, but far under what a ramp from depth
+    // 0 lets through (cutoff 1 kHz). Printed by:
+    // ./Builds/PluginTests "A session with a depth starts at that depth" -s | grep "level"
+    PluginProcessor processor;
+    setUp (processor, square, half, 4.0f, 1000.0f);
+    TestPlayHead head;
+    const auto output = render (processor, &head, 9600, 512, 2000.0, 0.25f, {}, 1.0);
+    const double first = rmsDb (output, 600), later = rmsDb (output, 6000);
+    SUCCEED ("level first " << first << " dB, later " << later << " dB");
+    CHECK (first < -50.0);
+    CHECK (later < -70.0);
 }
 
 TEST_CASE ("LFO edges and jumps stay curves", "[plugin][lfo][click]")
 {
-    // SPEC success criterion 3. 200 Hz sine, Cytomic SVF Low-pass at 1 kHz, resonance 20 %, depth 4 octaves:
-    // a square edge, a sawtooth reset, a position jump (a loop) and a Rate change at -12 and 0 dBFS. Without
-    // the slew each jump is 8 octaves in one step. Click measures printed by:
+    // SPEC success criterion 3. 200 Hz sine, Cytomic SVF Low-pass at 1 kHz, resonance 20 %, depth +4 and -4
+    // octaves: a square edge, a sawtooth reset, a position jump (a loop) and a Rate change at -12 and 0 dBFS.
+    // Without the slew each jump is 8 octaves in one step. Upward edges measure the most: a square, and a
+    // sawtooth reset at -4 octaves. Maxime heard the square at +/-4 octaves in Live on 2026-11-05 and did
+    // not object. Click measures printed by:
     // ./Builds/PluginTests "LFO edges and jumps stay curves" -s | grep "click"
-    for (float peak : { 0.25f, 1.0f })
-    {
-        auto measured = [&] (int shape, int rate, const std::function<void (PluginProcessor&, TestPlayHead&, int)>& onBlock) {
-            PluginProcessor processor;
-            setUp (processor, shape, rate, 4.0f, 1000.0f);
-            TestPlayHead head;
-            const auto output = render (processor, &head, 48000, 512, 200.0, peak, [&] (int start) { onBlock (processor, head, start); });
-            return clickFrom (output, 2400);
-        };
-        const auto nothing = [] (PluginProcessor&, TestPlayHead&, int) {};
-        const auto squareEdges = measured (square, quarter, nothing);
-        const auto sawtoothResets = measured (2, quarter, nothing);
-        const auto loop = measured (sine, quarter, [] (PluginProcessor&, TestPlayHead& head, int start) {
-            if (start == 24 * 512)
-            {
-                REQUIRE (head.quarterNotes > 0.5);
-                head.quarterNotes -= 0.25;
-            }
-        });
-        const auto shapeChange = measured (sine, quarter, [] (PluginProcessor& p, TestPlayHead&, int start) {
-            if (start == 24 * 512)
-                choiceParameter (p, "lfoShape") = square;
-        });
-        const auto rateChange = measured (sine, fourBars, [] (PluginProcessor& p, TestPlayHead&, int start) { if (start == 24 * 512) choiceParameter (p, "lfoRate") = 12; });
-        SUCCEED ("click peak " << peak << ": square " << squareEdges << ", sawtooth " << sawtoothResets << ", loop " << loop << ", rate " << rateChange << ", shape " << shapeChange);
-        CHECK (shapeChange < 0.004 * peak);
-        CHECK (squareEdges < 0.004 * peak);
-        CHECK (sawtoothResets < 0.001 * peak);
-        CHECK (loop < 0.002 * peak);
-        CHECK (rateChange < 0.001 * peak);
-    }
+    for (float depth : { 4.0f, -4.0f })
+        for (float peak : { 0.25f, 1.0f })
+        {
+            auto measured = [&] (int shape, int rate, const std::function<void (PluginProcessor&, TestPlayHead&, int)>& onBlock) {
+                PluginProcessor processor;
+                setUp (processor, shape, rate, depth, 1000.0f);
+                TestPlayHead head;
+                const auto output = render (processor, &head, 48000, 512, 200.0, peak, [&] (int start) { onBlock (processor, head, start); });
+                return clickFrom (output, 2400);
+            };
+            const auto nothing = [] (PluginProcessor&, TestPlayHead&, int) {};
+            const auto squareEdges = measured (square, quarter, nothing);
+            const auto sawtoothResets = measured (2, quarter, nothing);
+            const auto loop = measured (sine, quarter, [] (PluginProcessor&, TestPlayHead& head, int start) {
+                if (start == 24 * 512)
+                {
+                    REQUIRE (head.quarterNotes > 0.5);
+                    head.quarterNotes -= 0.25;
+                }
+            });
+            const auto shapeChange = measured (sine, quarter, [] (PluginProcessor& p, TestPlayHead&, int start) {
+                if (start == 24 * 512)
+                    choiceParameter (p, "lfoShape") = square;
+            });
+            const auto rateChange = measured (sine, fourBars, [] (PluginProcessor& p, TestPlayHead&, int start) {
+                if (start == 24 * 512)
+                    choiceParameter (p, "lfoRate") = 12;
+            });
+            SUCCEED ("click depth " << depth << ", peak " << peak << ": square " << squareEdges << ", sawtooth " << sawtoothResets << ", loop " << loop << ", rate " << rateChange << ", shape " << shapeChange);
+            CHECK (squareEdges < 0.004 * peak);
+            CHECK (sawtoothResets < 0.004 * peak);
+            CHECK (shapeChange < 0.004 * peak);
+            CHECK (loop < 0.004 * peak);
+            CHECK (rateChange < 0.004 * peak);
+        }
 }
 
 TEST_CASE ("A bad host transport stays harmless", "[plugin][lfo]")

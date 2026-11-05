@@ -70,7 +70,7 @@ namespace moodz::dsp
         // Definitions in docs/tasks/0015-synced-lfo.md. A hair of phase ahead: an edge that falls exactly
         // on a step of the modulation grid must not land on either side by the rounding of the phase,
         // which depends on the block size. A host position rounded more coarsely can still move an
-        // edge by one step of the grid, under 1 ms at 48 kHz.
+        // edge by one step of the grid.
         const double p = wrapped (currentPhase + 1e-9);
         switch (shape)
         {

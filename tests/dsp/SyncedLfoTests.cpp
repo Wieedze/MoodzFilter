@@ -4,10 +4,12 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <numbers>
 #include <string>
+#include <utility>
 
 using Catch::Approx;
 using moodz::dsp::SyncedLfo;
@@ -54,11 +56,13 @@ TEST_CASE ("The LFO shapes follow their definitions", "[dsp][lfo]")
     CHECK (at (triangle, 0.875) == Approx (-0.5).margin (1e-6));
 
     CHECK (at (sawtooth, 0.0) == Approx (-1.0).margin (1e-6));
+    CHECK (at (sawtooth, 0.125) == Approx (-0.75).margin (1e-6));
     CHECK (at (sawtooth, 0.25) == Approx (-0.5).margin (1e-6));
     CHECK (at (sawtooth, 0.5) == Approx (0.0).margin (1e-6));
     CHECK (at (sawtooth, 0.75) == Approx (0.5).margin (1e-6));
 
     CHECK (at (square, 0.0) == Approx (1.0).margin (1e-6));
+    CHECK (at (square, 0.125) == Approx (1.0).margin (1e-6));
     CHECK (at (square, 0.25) == Approx (1.0).margin (1e-6));
     CHECK (at (square, 0.5) == Approx (-1.0).margin (1e-6));
     CHECK (at (square, 0.75) == Approx (-1.0).margin (1e-6));
@@ -91,18 +95,40 @@ TEST_CASE ("Every rate lasts its length in quarter notes", "[dsp][lfo]")
 
 TEST_CASE ("The rates are the frozen list", "[dsp][lfo]")
 {
-    // SPEC: 4 bars to 1/32, with triplets and dotted values. Lengths in docs/tasks/0015-synced-lfo.md
-    CHECK (std::string (SyncedLfo::rates.front().label) == "4 bars");
-    CHECK (SyncedLfo::rates.front().quarterNotes == Approx (16.0));
-    CHECK (std::string (SyncedLfo::rates.back().label) == "1/32");
-    CHECK (SyncedLfo::rates.back().quarterNotes == Approx (0.125));
-    CHECK (std::string (SyncedLfo::rates[quarter].label) == "1/4");
-    CHECK (SyncedLfo::rates[quarter].quarterNotes == Approx (1.0));
-    for (std::size_t i = 1; i < SyncedLfo::rates.size(); ++i)
+    // SPEC: 4 bars to 1/32, with triplets and dotted values. Labels and lengths in quarter notes from
+    // docs/tasks/0015-synced-lfo.md, written out here: the list must not move once it is released.
+    const std::array<std::pair<const char*, double>, 22> expected { {
+        { "4 bars", 16.0 },
+        { "2 bars D", 12.0 },
+        { "4 bars T", 32.0 / 3.0 },
+        { "2 bars", 8.0 },
+        { "1 bar D", 6.0 },
+        { "2 bars T", 16.0 / 3.0 },
+        { "1 bar", 4.0 },
+        { "1/2 D", 3.0 },
+        { "1 bar T", 8.0 / 3.0 },
+        { "1/2", 2.0 },
+        { "1/4 D", 1.5 },
+        { "1/2 T", 4.0 / 3.0 },
+        { "1/4", 1.0 },
+        { "1/8 D", 0.75 },
+        { "1/4 T", 2.0 / 3.0 },
+        { "1/8", 0.5 },
+        { "1/16 D", 0.375 },
+        { "1/8 T", 1.0 / 3.0 },
+        { "1/16", 0.25 },
+        { "1/32 D", 0.1875 },
+        { "1/16 T", 1.0 / 6.0 },
+        { "1/32", 0.125 },
+    } };
+    REQUIRE (SyncedLfo::rates.size() == expected.size());
+    for (std::size_t i = 0; i < expected.size(); ++i)
     {
-        INFO (SyncedLfo::rates[i].label);
-        CHECK (SyncedLfo::rates[i].quarterNotes < SyncedLfo::rates[i - 1].quarterNotes);
+        INFO ("rate " << i);
+        CHECK (std::string (SyncedLfo::rates[i].label) == expected[i].first);
+        CHECK (SyncedLfo::rates[i].quarterNotes == Approx (expected[i].second).margin (1e-12));
     }
+    CHECK (std::string (SyncedLfo::rates[quarter].label) == "1/4");
 }
 
 TEST_CASE ("The phase comes from the song position", "[dsp][lfo]")
@@ -123,6 +149,34 @@ TEST_CASE ("The phase comes from the song position", "[dsp][lfo]")
     CHECK (lfo.phase() == Approx (0.75).margin (1e-9));
     lfo.syncToPosition (2049.5);
     CHECK (lfo.phase() == Approx (0.75).margin (1e-9));
+}
+
+TEST_CASE ("Every whole cycle of every rate is phase 0", "[dsp][lfo]")
+{
+    // Dotted and triplet rates too: 3 cycles from beat 0, forward and backward
+    for (int rate = 0; rate < static_cast<int> (SyncedLfo::rates.size()); ++rate)
+    {
+        INFO (SyncedLfo::rates[static_cast<std::size_t> (rate)].label);
+        auto lfo = prepared (sawtooth, rate);
+        const double length = SyncedLfo::rates[static_cast<std::size_t> (rate)].quarterNotes;
+        for (double position : { 3.0 * length, -3.0 * length })
+        {
+            lfo.syncToPosition (position);
+            const double distance = std::min (lfo.phase(), 1.0 - lfo.phase());
+            CHECK (distance < 1e-9);
+        }
+    }
+}
+
+TEST_CASE ("The sample rate sets the speed", "[dsp][lfo]")
+{
+    // Task 0015 verifier: at 44.1 kHz and 120 BPM a quarter note lasts 22050 samples
+    SyncedLfo lfo;
+    lfo.prepare (44100.0, 512);
+    lfo.setRateIndex (quarter);
+    lfo.reset();
+    lfo.advance (11025);
+    CHECK (lfo.phase() == Approx (0.5).margin (1e-9));
 }
 
 TEST_CASE ("The tempo sets the speed", "[dsp][lfo]")

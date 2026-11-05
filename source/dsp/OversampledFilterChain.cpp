@@ -20,7 +20,7 @@ namespace moodz::dsp
         crossfadeLength = std::max (1, static_cast<int> (std::lround (crossfadeSeconds * rate)));
         lfo.prepare (rate, maxBlockSize);
         const double gridSeconds = modulationGridSamples / rate;
-        // One-pole: y += (1 - exp (-T / tau)) (x - y), per step T of the grid
+        // One-pole low-pass, sampled RC: y += (1 - exp (-T / tau)) (x - y), per step T of the grid
         slewCoefficient = static_cast<float> (1.0 - std::exp (-gridSeconds / lfoSlewSeconds));
         lfoDepthRampSteps = std::max (1, static_cast<int> (std::lround (lfoDepthRampSeconds / gridSeconds)));
         reset();

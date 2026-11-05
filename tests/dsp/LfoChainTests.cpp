@@ -35,6 +35,7 @@ namespace
         int rate = SyncedLfo::defaultRateIndex;
         float depth = 0.0f;
         double tempo = 120.0;
+        double hostRate = sampleRate;
     };
 
     std::unique_ptr<OversampledFilterChain> preparedChain (const Settings& s)
@@ -48,7 +49,7 @@ namespace
         chain->setLfoRateIndex (s.rate);
         chain->setLfoDepthOctaves (s.depth);
         chain->setTempoBpm (s.tempo);
-        chain->prepare (sampleRate, 512);
+        chain->prepare (s.hostRate, 512);
         chain->reset();
         return chain;
     }
@@ -129,7 +130,7 @@ TEST_CASE ("At depth 0 the LFO changes nothing", "[dsp][lfo]")
     plain->prepare (sampleRate, 512);
     plain->reset();
     run (*plain, reference);
-    for (int shape : { sine, sawtooth, square })
+    for (int shape : { sine, 1, sawtooth, square })
         for (int rate : { 0, 12, 21 })
         {
             INFO ("shape " << shape << ", rate " << rate);
@@ -337,10 +338,10 @@ TEST_CASE ("A depth change ramps over 20 ms", "[dsp][lfo]")
     silence.assign (480, 0.0f);
     run (*chain, silence);
     CHECK (std::log2 (chain->modulatedCutoffHz() / 1000.0f) == Approx (1.0f).margin (0.1f));
-    silence.assign (416, 0.0f); // 896 after the change, more than one grid step before the end
+    silence.assign (448, 0.0f); // 928 after the change, one step of the grid before the end
     run (*chain, silence);
     CHECK (std::log2 (chain->modulatedCutoffHz() / 1000.0f) < 1.97f);
-    silence.assign (96, 0.0f); // 992: past the end by the grid's 32
+    silence.assign (64, 0.0f); // 992: past the end by the grid's 32
     run (*chain, silence);
     CHECK (std::log2 (chain->modulatedCutoffHz() / 1000.0f) == Approx (2.0f).margin (1e-4));
 }
@@ -348,8 +349,8 @@ TEST_CASE ("A depth change ramps over 20 ms", "[dsp][lfo]")
 TEST_CASE ("A square edge is a short curve, not a jump", "[dsp][lfo]")
 {
     // Decision notes of task 0015: 2 ms one-pole on the value. Depth 4 octaves, an edge is 8 octaves:
-    // no grid step moves more than 1 - exp (-32 / (0.002 x 48000)) = 0.283 of it, 2.27 octaves, and 10 ms
-    // later the cutoff is at its target.
+    // no grid step moves more than 0.283 of it, 2.27 octaves, and 10 ms later the cutoff is at its target:
+    // python3 -c "from math import exp; c=1-exp(-32/(.002*48000)); print(c, 8*c)"
     auto chain = preparedChain ({ .shape = square, .depth = 4.0f, .tempo = 120.0 });
     std::vector<float> silence (11968, 0.0f); // the edge is at 12000
     run (*chain, silence);
@@ -382,6 +383,132 @@ TEST_CASE ("The song position sets the LFO", "[dsp][lfo]")
     chain->syncLfoToPosition (0.0);
     run (*chain, silence);
     CHECK (chain->modulatedCutoffHz() == Approx (2000.0f).epsilon (1e-2));
+}
+
+TEST_CASE ("The LFO keeps its times at another sample rate", "[dsp][lfo]")
+{
+    // Task 0015 verifier: everything else runs at 48 kHz. At 44.1 kHz, 120 BPM: a square on a 1/4 has its edge
+    // at sample 11025; a step of the grid moves at most 0.304 of its 8 octaves, 2.43 octaves
+    // (python3 -c "from math import exp; c=1-exp(-32/(.002*44100)); print(c, 8*c)"); a 20 ms depth ramp lasts
+    // 882 samples, so 28 steps of the grid, 896 samples.
+    auto chain = preparedChain ({ .shape = square, .depth = 4.0f, .hostRate = 44100.0 });
+    std::vector<float> silence (11008, 0.0f); // the last step of the grid before the edge is at 10976
+    run (*chain, silence);
+    CHECK (chain->modulatedCutoffHz() == Approx (16000.0f).epsilon (1e-3));
+    float previous = chain->modulatedCutoffHz();
+    double largest = 0.0;
+    for (int step = 0; step < 16; ++step)
+    {
+        silence.assign (32, 0.0f);
+        run (*chain, silence);
+        largest = std::max (largest, octavesBetween (chain->modulatedCutoffHz(), previous));
+        previous = chain->modulatedCutoffHz();
+    }
+    CHECK (largest == Approx (2.43).margin (0.02));
+
+    auto ramp = preparedChain ({ .shape = square, .rate = 0, .hostRate = 44100.0 });
+    silence.assign (3200, 0.0f);
+    run (*ramp, silence);
+    ramp->setLfoDepthOctaves (2.0f);
+    silence.assign (864, 0.0f); // 27 steps of the 28
+    run (*ramp, silence);
+    CHECK (std::log2 (ramp->modulatedCutoffHz() / 1000.0f) < 1.97f);
+    silence.assign (64, 0.0f);
+    run (*ramp, silence);
+    CHECK (std::log2 (ramp->modulatedCutoffHz() / 1000.0f) == Approx (2.0f).margin (1e-4));
+}
+
+TEST_CASE ("Leaving rest starts from the LFO's value", "[dsp][lfo]")
+{
+    // Decision notes of task 0015: nothing follows the LFO at rest. Square on a 1/4, in its second half at
+    // sample 18000, depth raised then: the cutoff goes down at once, not up from the old value.
+    auto chain = preparedChain ({ .shape = square });
+    std::vector<float> silence (18016, 0.0f);
+    run (*chain, silence);
+    chain->setLfoDepthOctaves (2.0f);
+    silence.assign (64, 0.0f);
+    run (*chain, silence);
+    CHECK (chain->modulatedCutoffHz() < 1000.0f);
+}
+
+TEST_CASE ("A depth ramp to 0 lands on rest", "[dsp][lfo]")
+{
+    // Decision notes: exactly on the target, so the chain is at rest again and a cutoff change applies at
+    // the next block, not on the grid. 2.3 octaves does not land on 0 by adding its steps.
+    auto chain = preparedChain ({ .rate = 21, .depth = 2.3f });
+    std::vector<float> silence (2048, 0.0f);
+    run (*chain, silence);
+    chain->setLfoDepthOctaves (0.0f);
+    silence.assign (1056, 0.0f);
+    run (*chain, silence);
+    CHECK (chain->modulatedCutoffHz() == Approx (1000.0f).margin (1e-3));
+    std::array<float, 7> samples {};
+    const std::array<std::span<float>, 1> channels { std::span<float> { samples } };
+    chain->process (channels, 7);
+    chain->setCutoffHz (3000.0f);
+    chain->process (channels, 7);
+    CHECK (chain->modulatedCutoffHz() == Approx (3000.0f).margin (1e-3));
+}
+
+TEST_CASE ("A reset starts the LFO and its grid again", "[dsp][lfo]")
+{
+    // Grid and Slew notes. After samples that left the grid and the phase elsewhere, a reset gives what a
+    // new chain gives: the grid from sample 0, phase 0, the slew on the LFO's value.
+    auto chain = preparedChain ({ .shape = square, .rate = 9, .depth = 4.0f });
+    std::vector<float> samples (26407, 0.0f); // second half of a 1/2, slew settled, 7 samples past a step of the grid
+    run (*chain, samples);
+    CHECK (chain->modulatedCutoffHz() == Approx (62.5f).epsilon (0.05));
+    chain->reset();
+    std::array<float, 1> sample { 0.0f };
+    const std::array<std::span<float>, 1> channels { std::span<float> { sample } };
+    chain->process (channels, 1);
+    // Phase 0, value +1 at once
+    CHECK (chain->modulatedCutoffHz() == Approx (16000.0f).epsilon (1e-3));
+
+    // The grid restarts too: a sine moves the cutoff at samples 0, 32, 64..., whatever came before
+    auto moving = preparedChain ({ .shape = sine, .rate = 21, .depth = 2.0f });
+    samples.assign (7, 0.0f);
+    run (*moving, samples);
+    moving->reset();
+    moving->process (channels, 1);
+    float previous = moving->modulatedCutoffHz();
+    for (int i = 1; i < 64; ++i)
+    {
+        moving->process (channels, 1);
+        const float now = moving->modulatedCutoffHz();
+        if (i % 32 != 0)
+            REQUIRE (std::abs (now - previous) < 1e-6f);
+        else
+            CHECK (std::abs (now - previous) > 1e-3f);
+        previous = now;
+    }
+}
+
+TEST_CASE ("A first block of 0 samples does not start the LFO", "[dsp][lfo]")
+{
+    // .claude/rules/realtime-audio.md: the song position is known at the first real block
+    auto chain = preparedChain ({ .shape = square, .rate = 9, .depth = 4.0f });
+    std::array<float, 1> sample { 0.0f };
+    const std::array<std::span<float>, 1> channels { std::span<float> { sample } };
+    chain->process (channels, 0);
+    chain->syncLfoToPosition (1.0);
+    chain->process (channels, 1);
+    CHECK (chain->modulatedCutoffHz() == Approx (62.5f).epsilon (1e-3));
+}
+
+TEST_CASE ("A non-finite depth is ignored", "[dsp][lfo]")
+{
+    // The header of OversampledFilterChain
+    auto chain = preparedChain ({ .shape = square, .rate = 0, .depth = 1.0f });
+    std::vector<float> silence (2048, 0.0f);
+    run (*chain, silence);
+    for (float bad : { std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity() })
+    {
+        INFO ("depth " << bad);
+        chain->setLfoDepthOctaves (bad);
+        run (*chain, silence);
+        CHECK (chain->modulatedCutoffHz() == Approx (2000.0f).epsilon (1e-3));
+    }
 }
 
 TEST_CASE ("LFO settings reach both paths during a factor crossfade", "[dsp][lfo]")
