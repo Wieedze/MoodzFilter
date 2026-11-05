@@ -67,14 +67,16 @@ Unless stated: 48 kHz, blocks of 512. Every bound marked "to measure" comes from
 
 ## Definition of done
 
-* [ ] Tests written before the code, red then green.
-* [ ] Debug, Release, RTSan: `ctest` green.
-* [ ] `check` and `compare` green, no golden change.
-* [ ] pluginval 10 green.
-* [ ] `rt-safety-reviewer` passed.
-* [ ] Mutations run on the new tests before the verifier: each call, each ramp, each shape, the sync and the grid removed in turn go red.
-* [ ] `GLOSSARY.md` updated (LFO, Cycle length, Modulation grid, Slew).
-* [ ] **Maxime: the CI installer loads in Live; at depth 0 nothing changes; the four shapes are heard and sit on the beat at several rates and tempos; after a stop and a loop the LFO is back on the beat; positive and negative depth move in opposite directions; square at high depth does not click in a way that bothers.**
-* [ ] `code-review`, `task-verifier`: pass. Post-mortem written, `STATE.md` updated.
+* [x] Tests written before the code, red then green.
+* [x] Debug, Release, RTSan: `ctest` green.
+* [x] `check` and `compare` green, no golden change.
+* [x] pluginval 10 green.
+* [x] `rt-safety-reviewer` passed.
+* [x] Mutations run on the new tests before the verifier: each call, each ramp, each shape, the sync and the grid removed in turn go red.
+* [x] `GLOSSARY.md` updated (LFO, Cycle length, Modulation grid, Slew).
+* [x] **Maxime: the CI installer loads in Live; at depth 0 nothing changes; the four shapes are heard and sit on the beat at several rates and tempos; after a stop and a loop the LFO is back on the beat; positive and negative depth move in opposite directions; square at high depth does not click in a way that bothers.**
+* [x] `code-review`, `task-verifier`: pass. Post-mortem written, `STATE.md` updated.
 
 ## End note (filled by the task-verifier)
+
+2026-11-05, task-verifier: pass on 4aaade9, after 2 rounds that failed on test coverage and evidence; since the listened 135d6b0 the source changed in two comments only (`git diff 135d6b0 4aaade9 -- source`). Local Debug: `ctest` 181/181, `MoodzFilterTools check` all passed, `render` + `compare` against `tests/golden` within tolerance, no golden change. CI: the run of the closing commit is linked in PR #18; run 42035122020 on 135d6b0 green on Linux, Windows (pluginval 10 on both) and RealtimeSanitizer. Figures: swing 43.99 dB at ±2 octaves (`./Builds/PluginTests "The LFO moves the plugin output" -s | grep swing`); difference 3.5e-6 from beat 9 against beat 0 (`./Builds/PluginTests "The LFO is locked to the song position" -s | grep largest`); click measure at most 0.00233 × peak, for upward edges (`./Builds/PluginTests "LFO edges and jumps stay curves" -s | grep -A1 "click depth"`). The verifier's mutants on all layers go red, except equivalents or cases no row asks for: raw cutoff in `startPath`, grid advanced only while modulating, the `advance` guard, shape and rate in `prepareToPlay`, the depth's 0.01 step, its text parser. rt-safety review of aceb6c5 and 135d6b0: no real-time problem; one defect fixed (a NaN from an extreme song position), one low limit left in `FUTURE.md`. CPU of the grid: no difference measurable against main, noise about 10 %, dsp layer on Linux only. Code review on aceb6c5; 135d6b0, which came out of it, had the rt-safety review and the verifier, not a second code review. Maxime's Live test on the installer of 135d6b0: "ca marche nikle", 2026-11-05 about 14:50 CET, a general answer to the six-point list, with no separate answer on square at ±4 octaves. Not listened to as such: the sawtooth reset at −4 octaves; its bound of 0.004 × peak rests on measuring the same as the square's edge. The Rate click case reads about the same with or without the slew, so it says little about the slew; the whole test goes red without it. Tests and code share commits, so git cannot show red before green; the red runs were seen during the work and the mutations are the evidence. Left in `FUTURE.md`: the grid not anchored on the beat, the seed before the song position, a third ramp. Also there, Maxime's requests after the listening: the scroll of the generic editor, an LFO matrix. Post-mortem: playbook `docs/plugins/moodzfilter/learning/0015-synced-lfo.md`.
