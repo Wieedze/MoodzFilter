@@ -39,9 +39,9 @@ namespace moodz::dsp
         void setDriveDb (float db) noexcept MOODZ_NONBLOCKING;
         void setDriveCurveIndex (int index) noexcept MOODZ_NONBLOCKING;
 
-        // One or two channels; processes at most as many samples as the shortest span holds. A
-        // non-finite input sample counts as 0, and one beyond maxInputSample is clamped to it, so one
-        // bad sample cannot leave the filter state non-finite.
+        // One or two channels; processes at most as many samples as the shortest span holds. An input
+        // sample beyond maxInputSample, NaN and infinities included, counts as 0: it is not a signal, and
+        // it can neither leave the filter state non-finite nor come out as a click.
         void process (std::span<const std::span<float>> channels, int numSamples) noexcept MOODZ_NONBLOCKING;
 
     private:

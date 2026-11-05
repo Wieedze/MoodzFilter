@@ -389,6 +389,11 @@ namespace
     // Task 0014: what a broken host or plugin before us can send
     const std::array<float, 6> badSamples { std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(), 3e38f, -3e38f, std::numeric_limits<float>::max() };
 
+    bool allFinite (const std::vector<float>& samples)
+    {
+        return std::all_of (samples.begin(), samples.end(), [] (float s) { return std::isfinite (s); });
+    }
+
     void processInBlocks (OversampledFilterChain& chain, std::vector<float>& left, std::vector<float>* right = nullptr)
     {
         const int total = static_cast<int> (left.size());
@@ -409,29 +414,59 @@ TEST_CASE ("One bad input sample leaves every output sample finite", "[dsp][over
     // .claude/rules/dsp.md, task 0014. Every filter variant, every factor, resonance 100 %, Drive 0 and
     // 24 dB, noise with one bad sample at 1000. Red before the guard: non-finite to the end.
     const auto variants = moodz::dsp::filterVariants();
-    const auto input = noise (4096, 89u);
+    const auto input = noise (2048, 89u);
     for (std::size_t variant = 0; variant < variants.size(); ++variant)
         for (int factor : { off, twice, fourTimes })
+        {
+            auto chain = preparedChain (factor, FilterChoice { variant, 0.5f }, 1000.0f, 1.0f);
             for (float driveDb : { 0.0f, 24.0f })
                 for (float bad : badSamples)
                 {
                     INFO ("variant " << variant << ", factor index " << factor << ", Drive " << driveDb << ", bad sample " << bad);
-                    auto chain = preparedChain (factor, FilterChoice { variant, 0.5f }, 1000.0f, 1.0f);
                     chain->setDriveDb (driveDb);
                     chain->reset();
                     auto samples = input;
                     samples[1000] = bad;
                     processInBlocks (*chain, samples);
-                    const bool allFinite = std::all_of (samples.begin(), samples.end(), [] (float s) { return std::isfinite (s); });
-                    CHECK (allFinite);
+                    CHECK (allFinite (samples));
+                }
+        }
+}
+
+TEST_CASE ("A signal held at the bound keeps every filter finite", "[dsp][oversampling][non-finite]")
+{
+    // Code review of task 0014: the bound has to hold beyond one sample at one cutoff. Every variant at
+    // 4x, 7 kHz square at +/-256 (the largest signal the guard lets through), resonance 100 %, cutoff
+    // 20 Hz and 20 kHz, Drive 0 dB and 24 dB Asymmetric, at 44.1 and 192 kHz.
+    const auto variants = moodz::dsp::filterVariants();
+    for (double rate : { 44100.0, 192000.0 })
+        for (std::size_t variant = 0; variant < variants.size(); ++variant)
+            for (float cutoff : { 20.0f, 20000.0f })
+                for (float driveDb : { 0.0f, 24.0f })
+                {
+                    INFO ("rate " << rate << ", variant " << variant << ", cutoff " << cutoff << ", Drive " << driveDb);
+                    auto chain = std::make_unique<OversampledFilterChain>();
+                    chain->setCutoffHz (cutoff);
+                    chain->setResonance (1.0f);
+                    chain->setFactorIndex (fourTimes);
+                    chain->select (FilterChoice { variant, 0.5f });
+                    chain->setDriveDb (driveDb);
+                    chain->setDriveCurveIndex (asymmetricCurve);
+                    chain->prepare (rate, 512);
+                    chain->reset();
+                    std::vector<float> samples (2048);
+                    for (std::size_t i = 0; i < samples.size(); ++i)
+                        samples[i] = (static_cast<int> (static_cast<double> (i) * 7000.0 * 2.0 / rate) % 2 == 0) ? 256.0f : -256.0f;
+                    processInBlocks (*chain, samples);
+                    CHECK (allFinite (samples));
                 }
 }
 
 TEST_CASE ("The chain plays on after a bad input sample", "[dsp][oversampling][non-finite]")
 {
-    // Task 0014. Sine at -12 dBFS, 1 kHz, resonance 20 %, one bad sample at 4800: every sample finite, and
-    // 100 ms later the output is back to the one without it. largestDifference alone would not do:
-    // std::max skips a NaN. Largest difference printed by:
+    // Task 0014. 440 Hz sine at -12 dBFS, cutoff 1 kHz, resonance 20 %, one bad sample at 4800: every
+    // sample finite, and 100 ms later the output is back to the one without it (run: 0). largestDifference
+    // alone would not do: std::max skips a NaN. Largest difference printed by:
     // ./Builds/DspTests "The chain plays on after a bad input sample" -s | grep "difference"
     const auto input = sineAt (440.0, 0.25f, 19200);
     auto clean = input;
@@ -443,34 +478,37 @@ TEST_CASE ("The chain plays on after a bad input sample", "[dsp][oversampling][n
         samples[4800] = bad;
         auto chain = preparedChain (twice, cytomicLowPass, 1000.0f, 0.2f);
         processInBlocks (*chain, samples);
-        const bool allFinite = std::all_of (samples.begin(), samples.end(), [] (float s) { return std::isfinite (s); });
-        CHECK (allFinite);
+        CHECK (allFinite (samples));
         const float difference = largestDifference (samples, clean, 4800 + 4800, samples.size());
         SUCCEED ("largest difference after a bad sample " << bad << ": " << difference);
         CHECK (difference < 1e-4f);
     }
 }
 
-TEST_CASE ("A non-finite sample counts as 0 and a huge one as the bound", "[dsp][oversampling][non-finite]")
+TEST_CASE ("A bad sample counts as 0", "[dsp][oversampling][non-finite]")
 {
-    // Decision notes of task 0014: each bad sample gives the same output as the value it is replaced by
+    // Code review of task 0014: clamped to the bound, a huge sample came out as a click of about +48 dBFS.
+    // NaN, infinities and anything beyond +/-256 are not a signal: same output as a 0, checked finite too,
+    // since largestDifference skips a NaN. The last check shows a sample at the bound does reach the output.
     const auto input = noise (4096, 101u);
     auto rendered = [&] (float sample) {
         auto samples = input;
         samples[1000] = sample;
-        auto chain = preparedChain (twice, cytomicLowPass, 1000.0f, 0.5f);
+        auto chain = preparedChain (twice, cytomicHighPass, 1000.0f, 0.5f);
         processInBlocks (*chain, samples);
         return samples;
     };
-    const auto zero = rendered (0.0f), top = rendered (256.0f), bottom = rendered (-256.0f);
-    const auto infinity = std::numeric_limits<float>::infinity();
-    CHECK (largestDifference (rendered (std::numeric_limits<float>::quiet_NaN()), zero, 0, zero.size()) < 1e-6f);
-    CHECK (largestDifference (rendered (infinity), zero, 0, zero.size()) < 1e-6f);
-    CHECK (largestDifference (rendered (-infinity), zero, 0, zero.size()) < 1e-6f);
-    CHECK (largestDifference (rendered (3e38f), top, 0, top.size()) < 1e-6f);
-    CHECK (largestDifference (rendered (-3e38f), bottom, 0, bottom.size()) < 1e-6f);
-    // The output of the replaced sample does show: this check is not comparing equals by accident
-    CHECK (largestDifference (zero, top, 0, top.size()) > 1.0f);
+    const auto zero = rendered (0.0f);
+    for (float bad : badSamples)
+    {
+        INFO ("bad sample " << bad);
+        const auto output = rendered (bad);
+        CHECK (allFinite (output));
+        CHECK (largestDifference (output, zero, 0, zero.size()) < 1e-6f);
+    }
+    const auto justAbove = rendered (256.5f);
+    CHECK (largestDifference (justAbove, zero, 0, zero.size()) < 1e-6f);
+    CHECK (largestDifference (rendered (256.0f), zero, 0, zero.size()) > 1.0f);
 }
 
 TEST_CASE ("A bad sample on one channel leaves the other alone", "[dsp][oversampling][non-finite]")
@@ -487,16 +525,15 @@ TEST_CASE ("A bad sample on one channel leaves the other alone", "[dsp][oversamp
         auto left = input, right = input;
         left[1000] = bad;
         processInBlocks (*chain, left, &right);
-        const bool allFinite = std::all_of (right.begin(), right.end(), [] (float s) { return std::isfinite (s); });
-        CHECK (allFinite);
+        CHECK (allFinite (right));
         CHECK (largestDifference (right, cleanRight, 0, right.size()) < 1e-6f);
     }
 }
 
 TEST_CASE ("A hot signal within the bound is not touched", "[dsp][oversampling][non-finite]")
 {
-    // Task 0014: at Off the chain is the filter and a delay, so a signal at 256 and the same signal at
-    // 1/256 give outputs in that ratio; a lower clamp would break it. Cytomic SVF is linear.
+    // Task 0014: at Off the chain is the filter and a delay, so a signal at 255.9 and the same signal at
+    // 1/256 give outputs in that ratio; a lower bound would break it. Cytomic SVF is linear.
     const auto input = sineAt (440.0, 1.0f, 9600);
     auto scaled = [&] (float gain) {
         auto samples = input;
@@ -509,5 +546,6 @@ TEST_CASE ("A hot signal within the bound is not touched", "[dsp][oversampling][
         return samples;
     };
     const auto low = scaled (1.0f / 256.0f), high = scaled (255.9f);
+    CHECK (allFinite (high));
     CHECK (largestDifference (low, high, 0, low.size()) < 1e-3f);
 }

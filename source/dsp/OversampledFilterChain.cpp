@@ -122,7 +122,9 @@ namespace moodz::dsp
             for (int i = 0; i < count; ++i)
             {
                 auto& sample = channels[c][static_cast<std::size_t> (i)];
-                sample = std::isfinite (sample) ? std::clamp (sample, -maxInputSample, maxInputSample) : 0.0f;
+                // False for NaN too
+                if (!(std::abs (sample) <= maxInputSample))
+                    sample = 0.0f;
             }
 
         int start = 0;

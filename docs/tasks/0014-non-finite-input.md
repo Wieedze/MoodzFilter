@@ -6,7 +6,7 @@
 
 ## Goal
 
-One NaN, infinite or absurdly large input sample no longer leaves the filter state non-finite: the output stays finite and the plugin plays on, without a reset.
+One NaN, infinite or absurdly large input sample no longer leaves the filter state non-finite and no longer comes out as a click: the plugin plays on, without a reset.
 
 ## Expected behaviour (measurable)
 
@@ -16,7 +16,8 @@ Unless stated: 48 kHz, blocks of 512. Every bound marked "to measure" comes from
 | --- | --- | --- | --- |
 | Chain, every filter variant, every factor, resonance 100 %, Drive 0 and 24 dB, noise with one NaN, +inf, -inf, ±3e38 or ±FLT_MAX at sample 1000 | every output sample finite, including the bad one's | exact | `.claude/rules/dsp.md`; red before: non-finite to the end of the render |
 | Same, Cytomic SVF Low-pass, 1 kHz, resonance 20 %, sine with one NaN | back to the output without the bad sample 100 ms later | to measure | The plugin plays on |
-| NaN, ±inf against 0; ±3e38 against ±256, noise, 2x | same output as with the replacement value | 1e-6 | Decision notes |
+| NaN, ±inf, ±3e38, ±FLT_MAX, 256.5, noise, 2x, Cytomic SVF High-pass | same output as a 0, finite | 1e-6 | Decision notes; code review: clamped to the bound, a huge sample came out at about +48 dBFS |
+| Every variant at 4x, a 7 kHz square at ±256, resonance 100 %, cutoff 20 Hz and 20 kHz, Drive 0 dB and 24 dB Asymmetric, 44.1 and 192 kHz | every sample finite | exact | The bound has to hold beyond one sample, code review |
 | Stereo, bad sample on the left | right channel equal to its output without the bad sample | 1e-6 | SPEC (linked settings, separate signals) |
 | Every input sample within ±256 (+48 dBFS) | output identical with and without the guard: every golden reference unchanged | manifest tolerances | Legitimate hot signals are not touched |
 | Plugin, one NaN or +inf in `processBlock`, Gain out at silence and at 0 dB | every output sample finite after the latency | exact | FUTURE line from task 0006 |
@@ -31,7 +32,7 @@ Unless stated: 48 kHz, blocks of 512. Every bound marked "to measure" comes from
 ## Decision notes
 
 * **Where.** Once, at the top of `OversampledFilterChain::process`: everything downstream (oversampler, drive, filter) only ever sees bounded input. Gain out comes after the chain, so it is covered too.
-* **What.** A non-finite sample becomes 0. A finite sample beyond ±256 is clamped to ±256 (+48 dBFS): far above any real signal, and low enough for the filters to keep a finite state, which the tests check. A 0 for infinity rather than the bound, since it is not a signal.
+* **What.** Anything that is not within ±256 (+48 dBFS) becomes 0, NaN and infinities included: far above any real signal, so it is not a signal. Not clamped: at the bound a bad sample would come out as a click of about +48 dBFS, which is what the first version did (code review). The filters keep a finite state up to the bound, which the tests check.
 * **Search done** (`.claude/rules/scope.md` rule 8): JUCE's `FloatVectorOperations` have no NaN handling and are not usable in `dsp/`; a loop of a few lines needs no library.
 * **Cost.** One comparison per sample per channel, at the base rate.
 
