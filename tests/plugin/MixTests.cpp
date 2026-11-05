@@ -106,7 +106,7 @@ TEST_CASE ("At Mix 0 % the plugin gives the input delayed, like bypass", "[plugi
     for (std::size_t i = 40; i < output.size(); ++i)
     {
         const float expected = 0.25f * static_cast<float> (std::sin (2.0 * std::numbers::pi * 1000.0 * static_cast<double> (i - 40) / 48000.0));
-        REQUIRE (std::abs (output[i] - expected) < 1e-5f);
+        REQUIRE (std::abs (output[i] - expected) < 1e-6f);
     }
 }
 

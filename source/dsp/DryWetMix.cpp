@@ -64,9 +64,10 @@ namespace moodz::dsp
                 current = samplesLeft == 0 ? target : rampStart + step * static_cast<float> (rampLength - samplesLeft);
             }
             const auto index = static_cast<std::size_t> (i);
-            // Linear: dry and wet are aligned and correlated, so an equal-power law would bump the middle
+            // Linear: dry and wet are aligned and correlated, so an equal-power law would bump the middle.
+            // All dry takes nothing of the wet sample, even a non-finite one: 0 x NaN is NaN.
             for (std::size_t c = 0; c < numChannels; ++c)
-                channels[c][index] = current * channels[c][index] + (1.0f - current) * dry[c][index];
+                channels[c][index] = current <= 0.0f ? dry[c][index] : current * channels[c][index] + (1.0f - current) * dry[c][index];
         }
     }
 }

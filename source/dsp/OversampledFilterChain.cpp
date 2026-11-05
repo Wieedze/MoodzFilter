@@ -6,6 +6,9 @@
 
 namespace moodz::dsp
 {
+    static_assert (DryWetMix::maxSegment >= Oversampler::chunkSize, "the chain hands the mix segments of up to a chunk");
+    static_assert (OversampledFilterChain::latencySamples <= WholeSampleDelay::maxDelay, "the dry path is delayed by the latency");
+
     void OversampledFilterChain::prepare (double sampleRate, int maxBlockSize)
     {
         const double rate = std::isfinite (sampleRate) && sampleRate > 0.0 ? sampleRate : 48000.0;

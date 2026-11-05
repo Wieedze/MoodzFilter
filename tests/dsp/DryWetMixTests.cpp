@@ -1,3 +1,4 @@
+#include "dsp/DryWetMix.h"
 #include "dsp/FilterModels.h"
 #include "dsp/OversampledFilterChain.h"
 
@@ -23,7 +24,6 @@ namespace
     constexpr int latency = OversampledFilterChain::latencySamples;
     constexpr int rampLength = 960; // 20 ms at 48 kHz, as Gain out
     constexpr int off = 0, twice = 1, fourTimes = 2;
-    constexpr FilterChoice cytomicLowPass { 0, 0.0f };
 
     struct Settings
     {
@@ -119,24 +119,27 @@ namespace
     }
 }
 
-TEST_CASE ("At Mix 100 % the chain is as it was", "[dsp][mix]")
+TEST_CASE ("Back at Mix 100 % the output is the wet signal alone", "[dsp][mix]")
 {
-    // Goal of task 0017, against a chain that never heard of a Mix: with Drive and an LFO too
-    const auto input = noise (8192, 131u);
-    auto plain = std::make_unique<OversampledFilterChain>();
-    plain->setCutoffHz (1000.0f);
-    plain->setResonance (0.2f);
-    plain->setFactorIndex (twice);
-    plain->select (FilterChoice { 0, 0.5f });
-    plain->prepare (sampleRate, 512);
-    plain->reset();
+    // Goal of task 0017. Against the chain before the task, the golden references answer (`compare`, every
+    // reference unchanged). Here: a Mix that went down and came back leaves nothing of the dry path, with
+    // Drive and an LFO on, against a chain that stayed at 100 %.
+    const auto input = noise (16384, 131u);
+    const Settings settings { .driveDb = 12.0f, .driveCurve = 1, .lfoDepth = 1.0f };
+    auto steady = preparedChain (settings);
     auto reference = input;
-    run (*plain, reference);
-    auto chain = preparedChain ({ .mix = 1.0f });
+    run (*steady, reference);
+    auto moved = preparedChain (settings);
     auto output = input;
-    run (*chain, output);
+    std::span<float> all { output };
+    run (*moved, all.first (2048));
+    moved->setMix (0.5f);
+    run (*moved, all.subspan (2048, 2048));
+    moved->setMix (1.0f);
+    run (*moved, all.subspan (4096));
     CHECK (allFinite (output));
-    CHECK (largestDifference (output, reference, 0, output.size()) < 1e-7f);
+    CHECK (largestDifference (output, reference, 4096 + rampLength, output.size()) < 1e-7f);
+    CHECK (largestDifference (output, reference, 2048, 4096) > 1e-3f);
 }
 
 TEST_CASE ("At Mix 0 % the output is the input delayed by the latency", "[dsp][mix]")
@@ -156,6 +159,23 @@ TEST_CASE ("At Mix 0 % the output is the input delayed by the latency", "[dsp][m
             }
 }
 
+TEST_CASE ("At Mix 0 % a crossfade in the chain does not leak", "[dsp][mix]")
+{
+    // Code review of task 0017: an Oversampling change and a Model change run while the Mix is at 0 %. The
+    // blend comes after the factor crossfade, so the output stays the input delayed.
+    const auto input = noise (16384, 163u);
+    const auto expected = delayed (input);
+    auto chain = preparedChain ({ .mix = 0.0f, .cutoff = 200.0f, .driveDb = 24.0f });
+    auto output = input;
+    std::span<float> all { output };
+    run (*chain, all.first (4096));
+    chain->setFactorIndex (fourTimes);
+    run (*chain, all.subspan (4096, 4096));
+    chain->select (FilterChoice { 6, 0.5f });
+    run (*chain, all.subspan (8192));
+    CHECK (largestDifference (output, expected, 0, output.size()) < 1e-6f);
+}
+
 TEST_CASE ("Dry and wet are aligned at Mix 50 %", "[dsp][mix]")
 {
     // SPEC: no comb. An impulse, filter wide open, resonance 0, each factor: one peak, at the latency,
@@ -173,7 +193,7 @@ TEST_CASE ("Dry and wet are aligned at Mix 50 %", "[dsp][mix]")
         CHECK (std::abs (std::distance (output.begin(), peak) - (100 + latency)) <= 1);
         const float top = std::abs (*peak);
         CHECK (top > 0.5f);
-        // Nothing beyond 2 samples from the peak reaches half of it, as a misaligned dry impulse would
+        // Nothing beyond 2 samples from the peak reaches 40 % of it, as a dry impulse further away would
         float second = 0.0f;
         for (std::size_t i = 0; i < output.size(); ++i)
             if (std::abs (static_cast<std::ptrdiff_t> (i) - std::distance (output.begin(), peak)) > 2)
@@ -185,9 +205,9 @@ TEST_CASE ("Dry and wet are aligned at Mix 50 %", "[dsp][mix]")
 
 TEST_CASE ("Mix 50 % has no comb with the filter wide open", "[dsp][mix]")
 {
-    // SPEC. Sines at -12 dBFS, cutoff 20 kHz, resonance 0: level at Mix 50 % against Mix 100 %. Dry and wet
-    // are within the filter's own phase there, so the level stays close. A dry path one sample off makes a
-    // dip of about 1.3 dB at 10 kHz and 3 dB at 15 kHz. Printed by:
+    // SPEC. Sines at -12 dBFS, cutoff 20 kHz, resonance 0: level at Mix 50 % against the blend of a dry at 0 dB
+    // and that wet's level. What is left is the filter's own phase near its cutoff, not a misalignment: the
+    // dry path's exact delay is checked at Mix 0 %. Printed by:
     // ./Builds/DspTests "Mix 50 % has no comb with the filter wide open" -s | grep "dip"
     for (int factor : { off, twice, fourTimes })
         for (double frequency : { 1000.0, 5000.0, 10000.0, 15000.0 })
@@ -348,6 +368,23 @@ TEST_CASE ("A reset clears the dry path and jumps to the Mix", "[dsp][mix]")
     auto output = sine (10000.0, 0.25f, 512);
     run (*moved, output);
     CHECK (rms (output, 256) < 0.001);
+}
+
+TEST_CASE ("All dry ignores a non-finite wet signal", "[dsp][mix]")
+{
+    // Code review of task 0017: 0 x NaN is NaN, and all dry means all dry, whatever the wet path holds.
+    moodz::dsp::DryWetMix mix;
+    mix.setAmount (0.0f);
+    mix.prepare (sampleRate, 512, 0);
+    std::array<float, 4> samples { 0.1f, 0.2f, 0.3f, 0.4f };
+    const std::array<std::span<float>, 1> channels { std::span<float> { samples } };
+    mix.captureDry (channels, 4);
+    samples = { std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(), 1.0f };
+    mix.mix (channels, 4);
+    CHECK (samples[0] == Approx (0.1f).margin (1e-7));
+    CHECK (samples[1] == Approx (0.2f).margin (1e-7));
+    CHECK (samples[2] == Approx (0.3f).margin (1e-7));
+    CHECK (samples[3] == Approx (0.4f).margin (1e-7));
 }
 
 TEST_CASE ("Mix values out of range are bounded", "[dsp][mix]")

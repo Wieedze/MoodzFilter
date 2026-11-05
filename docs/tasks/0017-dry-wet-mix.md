@@ -14,9 +14,9 @@ Unless stated: 48 kHz, blocks of 512. Every bound marked "to measure" comes from
 
 | Check | Expected result | Tolerance | Source |
 | --- | --- | --- | --- |
-| Mix 100 %, against the chain before the task | same output | 1e-7 | Goal |
+| Mix back at 100 % after a move, Drive and LFO on, against a chain that stayed there | same output | 1e-7 | Goal; against the chain before the task, `compare` answers |
 | `check`, `render`, `compare` at the default | every reference unchanged, no `golden:` commit | manifest tolerances | ADR 0003 |
-| Mix 0 %, any Model, Drive, Oversampling, LFO | output equal to the input delayed by the constant latency, 40 samples, the same as bypass | 1e-6 | SPEC, ADR 0009 |
+| Mix 0 %, any Model, Drive, Oversampling, LFO, also during an Oversampling or Model crossfade, also with a non-finite wet sample | output equal to the input delayed by the constant latency, 40 samples, the same signal as bypass | 1e-6 | SPEC, ADR 0009, code review |
 | Mix 50 %, an impulse, Oversampling Off, 2x, 4x, filter wide open | a single peak at the latency, ± 1 sample of the wet peak: nothing beyond 2 samples above 40 % of it (run: at most 3 %) | to measure | SPEC: no comb filtering |
 | Mix 50 %, sines at 1, 5, 10 and 15 kHz, filter wide open, resonance 0, each factor | within 2 dB of the blend of a dry at 0 dB and that wet's level (run: at most 1.78 dB at 15 kHz at 4x, the filter's own phase near its cutoff) | to measure | SPEC |
 | Mix at 25 % and 75 %, a 10 kHz sine, Cytomic SVF Low-pass at 20 Hz, so the wet part is gone | output level 75 % and 25 % of the input: the dry weight | 0.1 dB | Linear blend, decision notes |
@@ -43,7 +43,8 @@ Unless stated: 48 kHz, blocks of 512. Every bound marked "to measure" comes from
 
 * **Blend.** `y = m wet + (1 − m) dry`, linear in `m`: dry and wet are aligned and correlated, so an equal-power law would bump the level in the middle.
 * **Where.** At the end of each segment of `OversampledFilterChain::process`, after the factor crossfade. The dry part is a copy of the input after the input guard, delayed by the constant latency (`WholeSampleDelay`, 40). Gain out stays after it, as in the SPEC.
-* **At rest.** At 100 % the output is the wet part untouched, by a shortcut, and the dry delay keeps running so a Mix change finds it filled. At 0 % the filter keeps running too, so moving Mix up finds it settled: no saving there, and none is sought.
+* **At rest.** At 100 % the output is the wet part untouched, by a shortcut, and the dry delay keeps running so a Mix change finds it filled. At 0 % the output takes the dry part alone, and the filter keeps running, so moving Mix up finds it settled: no saving there, and none is sought.
+* **Interface.** `captureDry` then `mix`, instead of the `process` of `.claude/rules/dsp.md`, since the chain runs between the two; and the delay is given to `prepare`, since it is the chain's latency.
 * **Smoothing.** A linear ramp over 20 ms, per sample. A fourth ramp, added to the `FUTURE.md` line on one ramp type: no refactor in this task.
 * **Search done** (`.claude/rules/scope.md` rule 8): `juce::dsp::DryWetMixer` is not usable in `dsp/` (no JUCE). Its latency handling is what `WholeSampleDelay` already does here.
 * **Comb.** The filter has its own phase, so at Mix 50 % a low-pass near its cutoff will thin some frequencies. That is the sound of a dry/wet filter, not a misalignment. The comb rows run wide open.
