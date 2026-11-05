@@ -387,7 +387,7 @@ TEST_CASE ("The drive comes before the filter", "[dsp][oversampling][drive]")
 namespace
 {
     // Task 0014: what a broken host or plugin before us can send
-    const std::array<float, 6> badSamples { std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(), 3e38f, -3e38f, std::numeric_limits<float>::max() };
+    const std::array<float, 7> badSamples { std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(), 3e38f, -3e38f, std::numeric_limits<float>::max(), std::numeric_limits<float>::lowest() };
 
     bool allFinite (const std::vector<float>& samples)
     {
@@ -412,7 +412,8 @@ namespace
 TEST_CASE ("One bad input sample leaves every output sample finite", "[dsp][oversampling][non-finite]")
 {
     // .claude/rules/dsp.md, task 0014. Every filter variant, every factor, resonance 100 %, Drive 0 and
-    // 24 dB, noise with one bad sample at 1000. Red before the guard: non-finite to the end.
+    // 24 dB, noise with one bad sample at 1000. Red before the guard: NaN non-finite to the end on every
+    // run, the others on some variants.
     const auto variants = moodz::dsp::filterVariants();
     const auto input = noise (2048, 89u);
     for (std::size_t variant = 0; variant < variants.size(); ++variant)
@@ -487,9 +488,11 @@ TEST_CASE ("The chain plays on after a bad input sample", "[dsp][oversampling][n
 
 TEST_CASE ("A bad sample counts as 0", "[dsp][oversampling][non-finite]")
 {
-    // Code review of task 0014: clamped to the bound, a huge sample came out as a click of about +48 dBFS.
+    // Code review of task 0014: clamped to the bound, a huge sample came out as a loud click: the peak a
+    // sample at the bound gives is printed by:
+    // ./Builds/DspTests "A bad sample counts as 0" -s | grep "peak"
     // NaN, infinities and anything beyond +/-256 are not a signal: same output as a 0, checked finite too,
-    // since largestDifference skips a NaN. The last check shows a sample at the bound does reach the output.
+    // since largestDifference skips a NaN. The last checks show a sample at the bound does reach the output.
     const auto input = noise (4096, 101u);
     auto rendered = [&] (float sample) {
         auto samples = input;
@@ -506,9 +509,20 @@ TEST_CASE ("A bad sample counts as 0", "[dsp][oversampling][non-finite]")
         CHECK (allFinite (output));
         CHECK (largestDifference (output, zero, 0, zero.size()) < 1e-6f);
     }
-    const auto justAbove = rendered (256.5f);
-    CHECK (largestDifference (justAbove, zero, 0, zero.size()) < 1e-6f);
-    CHECK (largestDifference (rendered (256.0f), zero, 0, zero.size()) > 1.0f);
+    for (float justAbove : { 256.5f, -256.5f })
+    {
+        INFO ("just above the bound " << justAbove);
+        const auto output = rendered (justAbove);
+        CHECK (allFinite (output));
+        CHECK (largestDifference (output, zero, 0, zero.size()) < 1e-6f);
+    }
+    const auto atTop = rendered (256.0f);
+    CHECK (largestDifference (atTop, zero, 0, zero.size()) > 1.0f);
+    CHECK (largestDifference (rendered (-256.0f), zero, 0, zero.size()) > 1.0f);
+    float peak = 0.0f;
+    for (auto s : atTop)
+        peak = std::max (peak, std::abs (s));
+    SUCCEED ("peak of a sample at the bound, Cytomic SVF High-pass: " << 20.0f * std::log10 (peak) << " dBFS");
 }
 
 TEST_CASE ("A bad sample on one channel leaves the other alone", "[dsp][oversampling][non-finite]")
@@ -533,7 +547,8 @@ TEST_CASE ("A bad sample on one channel leaves the other alone", "[dsp][oversamp
 TEST_CASE ("A hot signal within the bound is not touched", "[dsp][oversampling][non-finite]")
 {
     // Task 0014: at Off the chain is the filter and a delay, so a signal at 255.9 and the same signal at
-    // 1/256 give outputs in that ratio; a lower bound would break it. Cytomic SVF is linear.
+    // 1/256 give outputs in that ratio; a lower bound would break it. Cytomic SVF is linear, so the bound
+    // only leaves float rounding. Printed by: ./Builds/DspTests "A hot signal within the bound is not touched" -s | grep "ratio"
     const auto input = sineAt (440.0, 1.0f, 9600);
     auto scaled = [&] (float gain) {
         auto samples = input;
@@ -547,5 +562,7 @@ TEST_CASE ("A hot signal within the bound is not touched", "[dsp][oversampling][
     };
     const auto low = scaled (1.0f / 256.0f), high = scaled (255.9f);
     CHECK (allFinite (high));
-    CHECK (largestDifference (low, high, 0, low.size()) < 1e-3f);
+    const float difference = largestDifference (low, high, 0, low.size());
+    SUCCEED ("ratio kept within " << difference);
+    CHECK (difference < 1e-5f);
 }

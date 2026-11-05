@@ -55,10 +55,10 @@ TEST_CASE ("One bad input sample leaves the plugin output finite", "[plugin][non
 
 TEST_CASE ("A bad sample on every block with every setting moving stays finite", "[plugin][non-finite]")
 {
-    // Task 0014, run under RealtimeSanitizer in CI. 2 s, a bad sample on every block, every setting
-    // that picks a filter variant or the cutoff changing on every block, resonance 100 %.
+    // Task 0014, run under RealtimeSanitizer in CI. 2 s of noise in blocks of 512, every parameter moving
+    // on every block, one bad sample per block: on the first, the last or a middle sample of the block, on
+    // either channel, all combinations with each kind of bad sample.
     PluginProcessor processor;
-    parameter<juce::AudioParameterFloat> (processor, "resonance") = 100.0f;
     auto& model = parameter<juce::AudioParameterChoice> (processor, "filterModel");
     auto& oversampling = parameter<juce::AudioParameterChoice> (processor, "oversampling");
     auto& drive = parameter<juce::AudioParameterFloat> (processor, "drive");
@@ -67,11 +67,15 @@ TEST_CASE ("A bad sample on every block with every setting moving stays finite",
     auto& saturation = parameter<juce::AudioParameterFloat> (processor, "k35Saturation");
     auto& variant = parameter<juce::AudioParameterChoice> (processor, "vintageVariant");
     auto& cutoff = parameter<juce::AudioParameterFloat> (processor, "cutoff");
-    processor.prepareToPlay (48000.0, 256);
-    juce::AudioBuffer<float> buffer (2, 256);
+    auto& resonance = parameter<juce::AudioParameterFloat> (processor, "resonance");
+    auto& gainOut = parameter<juce::AudioParameterFloat> (processor, "gainOut");
+    processor.prepareToPlay (48000.0, 512);
+    juce::AudioBuffer<float> buffer (2, 512);
     juce::MidiBuffer midi;
+    juce::Random random (43);
     const float bad[] { std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(), -3e38f };
-    for (int block = 0; block < 375; ++block)
+    const int positions[] { 0, 511, 100 };
+    for (int block = 0; block < 188; ++block) // 2 s at 48 kHz
     {
         model = block % 9;
         oversampling = block % 3;
@@ -81,11 +85,15 @@ TEST_CASE ("A bad sample on every block with every setting moving stays finite",
         saturation = static_cast<float> (block % 5) * 25.0f;
         variant = block % 6;
         cutoff = block % 2 == 0 ? 20.0f : 20000.0f;
-        fillSine (buffer, block);
-        buffer.setSample (block % 2, block % 256, bad[block % 3]);
+        resonance = block % 4 == 0 ? 100.0f : 50.0f;
+        gainOut = block % 3 == 0 ? -60.0f : 6.0f;
+        for (int channel = 0; channel < 2; ++channel)
+            for (int i = 0; i < 512; ++i)
+                buffer.setSample (channel, i, 0.25f * (random.nextFloat() * 2.0f - 1.0f));
+        buffer.setSample (block % 2, positions[block % 3], bad[(block / 6) % 3]);
         processor.processBlock (buffer, midi);
         for (int channel = 0; channel < 2; ++channel)
-            for (int i = 0; i < 256; ++i)
+            for (int i = 0; i < 512; ++i)
                 REQUIRE (std::isfinite (buffer.getSample (channel, i)));
     }
 }

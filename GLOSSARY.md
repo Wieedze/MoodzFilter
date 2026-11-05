@@ -39,6 +39,9 @@ Vocabulary shared between you, the agents and the code (Matt Pocock convention: 
 | **DC blocker** | A one-pole high-pass at 10 Hz in the input drive, removing the offset the Asymmetric curve adds, without filtering the dry signal |
 | **Even part, odd part** | The two halves of the Asymmetric curve: the odd part limits the signal, the even part holds the offset and the even harmonics, and alone goes through the DC blocker |
 | **Bump measure** | Largest absolute mean of the output over any 5 ms after a change, on a 200 Hz sine, whose own mean over that time is 0: sees the low-frequency bump the click measure cannot (`bumpMeasure`, task 0013 tests) |
+| **Input guard** | The check at the top of `OversampledFilterChain::process`: a bad sample counts as 0 (task 0014) |
+| **Bad sample** | An input sample that is not a signal: NaN, an infinity, or beyond the bound. Anything within the bound is a hot signal at most, and is left alone |
+| **The bound** | `OversampledFilterChain::maxInputSample`, ±256: the largest input sample the input guard lets through |
 | **Pre-roll** | The first samples of an Oversampling crossfade, where the incoming path runs unheard so that its empty start does not click |
 | **Whole sample delay** | `dsp::WholeSampleDelay`: a delay of a whole number of samples, completing Off and 2x to the constant latency and delaying the bypass path |
 | **Crossfading filter bank** | `dsp::CrossfadingFilterBank`: every filter variant prepared once, the selected one playing, and the crossfade between two of them; a choice made during a crossfade waits for it to end |

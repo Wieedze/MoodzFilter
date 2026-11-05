@@ -24,7 +24,8 @@ namespace moodz::dsp
         static constexpr double crossfadeSeconds = CrossfadingFilterBank::crossfadeSeconds;
         // Twice the latency: the signal reaches the output, then the FIR's own ringing is over
         static constexpr int preRollSamples = 2 * latencySamples;
-        // +48 dBFS: far above any real signal, and the filters keep a finite state up to it (task 0014)
+        // python3 -c "from math import log10; print(20*log10(256))": +48 dBFS, far above any real signal,
+        // and the filters keep a finite state up to it (task 0014)
         static constexpr float maxInputSample = 256.0f;
 
         void prepare (double sampleRate, int maxBlockSize);
