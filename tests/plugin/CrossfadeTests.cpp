@@ -120,8 +120,8 @@ TEST_CASE ("An Oversampling change does not click", "[plugin][crossfade][oversam
 {
     // SPEC success criterion 3, task 0012. Click measures printed by:
     // ./Builds/PluginTests "An Oversampling change does not click" -s | grep "click"
-    // A one sample crossfade gave 0.040, 0.043, 0.031; 20 ms without the pre-roll 0.0016, 0.0017,
-    // 0.0012; with it 0.00017, the sine alone. The bound stays close to that.
+    // With preRoll forced to 0 in OversampledFilterChain.cpp: 0.0016, 0.0017, 0.0012. As it is:
+    // 0.00017, the sine alone. The bound stays close to that.
     constexpr double maximumOversamplingClick = 0.00025;
     const auto offTo2x = clickMeasure (change ("oversampling", 0.0f, 1.0f));
     const auto twoTo4x = clickMeasure (change ("oversampling", 1.0f, 2.0f));

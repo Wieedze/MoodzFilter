@@ -32,6 +32,8 @@ Vocabulary shared between you, the agents and the code (Matt Pocock convention: 
 | **Oversampling factor** | How many times the sample rate the filter runs at: 1 (Off), 2 or 4; `dsp::Oversampler` goes up and down with a linear phase FIR |
 | **Oversampled filter chain** | `dsp::OversampledFilterChain`: one crossfading filter bank per oversampling factor, each with its oversampler and its delay to the constant latency, and the crossfade between two of them |
 | **Constant latency** | The one latency the plugin reports at every Oversampling setting: Off and 2x are delayed to the 4x round trip (ADR 0009) |
+| **Round trip** | Up then down through the oversampler: the signal comes back at the base rate, delayed by the stage's latency |
+| **Chunk** | A slice of at most `Oversampler::chunkSize` (256) base samples: `OversampledFilterChain` splits each block into chunks, so no buffer depends on the host's block size |
 | **Pre-roll** | The first samples of an Oversampling crossfade, where the incoming path runs unheard so that its empty start does not click |
 | **Whole sample delay** | `dsp::WholeSampleDelay`: a delay of a whole number of samples, completing Off and 2x to the constant latency and delaying the bypass path |
 | **Crossfading filter bank** | `dsp::CrossfadingFilterBank`: every filter variant prepared once, the selected one playing, and the crossfade between two of them; a choice made during a crossfade waits for it to end |

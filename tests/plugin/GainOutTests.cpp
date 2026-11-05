@@ -78,7 +78,7 @@ TEST_CASE ("Gain out is applied to both channels", "[plugin][gain]")
 {
     PluginProcessor processor;
     floatParameter (processor, "gainOut") = 6.0f;
-    // Off: the oversampler's pass band ripple (task 0012, about 0.001 dB at DC) would hide the gain alone
+    // Off: the oversampler's pass band ripple (task 0012) would hide the gain alone
     for (auto* parameter : processor.getParameters())
         if (auto* choice = dynamic_cast<juce::AudioParameterChoice*> (parameter); choice != nullptr && choice->paramID == "oversampling")
             *choice = 0;
