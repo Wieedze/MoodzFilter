@@ -71,6 +71,11 @@ namespace moodz::parameters
         return toChoiceIndex (rawValue, dsp::Oversampler::factorLabels.size());
     }
 
+    int toDriveCurveIndex (float rawValue) noexcept
+    {
+        return toChoiceIndex (rawValue, dsp::InputDrive::curveLabels.size());
+    }
+
     juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
     {
         juce::AudioProcessorValueTreeState::ParameterLayout layout;
@@ -152,6 +157,22 @@ namespace moodz::parameters
         layout.add (std::make_unique<juce::AudioParameterChoice> (
             juce::ParameterID { id::oversampling, version::task0012 }, "Oversampling", factorNames, dsp::Oversampler::defaultFactorIndex));
 
+        // SPEC, ADR 0009: Drive 0 to 24 dB, default 0 dB, transparent there, smoothed in the dsp layer
+        layout.add (std::make_unique<juce::AudioParameterFloat> (
+            juce::ParameterID { id::drive, version::task0013 },
+            "Drive",
+            juce::NormalisableRange<float> { dsp::InputDrive::minDb, dsp::InputDrive::maxDb, 0.1f },
+            dsp::InputDrive::minDb,
+            juce::AudioParameterFloatAttributes {}
+                .withStringFromValueFunction ([] (float db, int) { return decibelsToText (db); })
+                .withValueFromStringFunction ([] (const juce::String& text) { return textToDecibels (text); })));
+
+        juce::StringArray driveCurveNames;
+        for (const auto* label : dsp::InputDrive::curveLabels)
+            driveCurveNames.add (label);
+        layout.add (std::make_unique<juce::AudioParameterChoice> (
+            juce::ParameterID { id::driveCurve, version::task0013 }, "Drive curve", driveCurveNames, dsp::InputDrive::defaultCurveIndex));
+
         return layout;
     }
 
@@ -163,10 +184,13 @@ namespace moodz::parameters
           slope (state.getRawParameterValue (id::slope)),
           k35Saturation (state.getRawParameterValue (id::k35Saturation)),
           vintageVariant (state.getRawParameterValue (id::vintageVariant)),
-          oversampling (state.getRawParameterValue (id::oversampling))
+          oversampling (state.getRawParameterValue (id::oversampling)),
+          drive (state.getRawParameterValue (id::drive)),
+          driveCurve (state.getRawParameterValue (id::driveCurve))
     {
         jassert (gainOut != nullptr && filterModel != nullptr && cutoff != nullptr && resonance != nullptr);
         jassert (slope != nullptr && k35Saturation != nullptr && vintageVariant != nullptr && oversampling != nullptr);
+        jassert (drive != nullptr && driveCurve != nullptr);
     }
 
     Params Snapshotter::snapshot() const noexcept
@@ -181,6 +205,8 @@ namespace moodz::parameters
             k35Saturation->load (relaxed) / 100.0f,
             toVintageVariantIndex (vintageVariant->load (relaxed)),
             toOversamplingIndex (oversampling->load (relaxed)),
+            drive->load (relaxed),
+            toDriveCurveIndex (driveCurve->load (relaxed)),
         };
     }
 }

@@ -114,13 +114,15 @@ TEST_CASE ("The plugin filters with the selected model", "[plugin][filter]")
 TEST_CASE ("Switching the model and its settings on every block stays finite", "[plugin][filter]")
 {
     // Every Model entry, Slope 6 to 24 dB in 3 dB steps (every Diode step and Morph values between),
-    // K35 saturation 0 to 100 %, every Vintage variant, every Oversampling setting, changed on every block
+    // K35 saturation 0 to 100 %, every Vintage variant, every Oversampling setting, Drive 0 to 24 dB, both Drive curves, changed on every block
     PluginProcessor processor;
     auto& model = parameter<juce::AudioParameterChoice> (processor, "filterModel");
     auto& slope = parameter<juce::AudioParameterFloat> (processor, "slope");
     auto& saturation = parameter<juce::AudioParameterFloat> (processor, "k35Saturation");
     auto& variant = parameter<juce::AudioParameterChoice> (processor, "vintageVariant");
     auto& oversampling = parameter<juce::AudioParameterChoice> (processor, "oversampling");
+    auto& drive = parameter<juce::AudioParameterFloat> (processor, "drive");
+    auto& driveCurve = parameter<juce::AudioParameterChoice> (processor, "driveCurve");
     parameter<juce::AudioParameterFloat> (processor, "resonance") = 100.0f;
     processor.prepareToPlay (48000.0, 256);
 
@@ -134,6 +136,8 @@ TEST_CASE ("Switching the model and its settings on every block stays finite", "
         saturation = static_cast<float> (block % 5) * 25.0f;
         variant = block % 6;
         oversampling = block % 3;
+        drive = static_cast<float> (block % 5) * 6.0f;
+        driveCurve = block % 2;
         for (int channel = 0; channel < 2; ++channel)
             for (int i = 0; i < 256; ++i)
                 buffer.setSample (channel, i, 0.25f * (random.nextFloat() * 2.0f - 1.0f));
@@ -194,6 +198,8 @@ TEST_CASE ("Parameter versions follow the order of addition", "[plugin][paramete
     CHECK (parameter<juce::AudioParameterFloat> (processor, "k35Saturation").getVersionHint() == 3);
     CHECK (parameter<juce::AudioParameterChoice> (processor, "vintageVariant").getVersionHint() == 3);
     CHECK (parameter<juce::AudioParameterChoice> (processor, "oversampling").getVersionHint() == 4);
+    CHECK (parameter<juce::AudioParameterFloat> (processor, "drive").getVersionHint() == 5);
+    CHECK (parameter<juce::AudioParameterChoice> (processor, "driveCurve").getVersionHint() == 5);
 }
 
 namespace

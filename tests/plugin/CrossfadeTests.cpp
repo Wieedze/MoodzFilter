@@ -169,3 +169,60 @@ TEST_CASE ("A Diode slope wobbling across a step does not click", "[plugin][cros
     SUCCEED ("click Diode slope wobble " << measure);
     CHECK (measure < maximumClick);
 }
+
+TEST_CASE ("Drive and Drive curve changes do not click", "[plugin][crossfade][drive]")
+{
+    // SPEC success criterion 3, post-mortem 0012: filter wide open, -12 and 0 dBFS. Each change is
+    // measured against the setting it ends on, held steady, since a saturated sine has a sharper
+    // curve than a clean one. Click measures printed by:
+    // ./Builds/PluginTests "Drive and Drive curve changes do not click" -s | grep "click"
+    auto steady = [] (float drive, float curve) {
+        return [=] (PluginProcessor& p, int block) {
+            if (block == -1)
+            {
+                set (p, "cutoff", 20000.0f);
+                set (p, "drive", drive);
+                set (p, "driveCurve", curve);
+            }
+        };
+    };
+    auto wide = [] (float curve) { return [=] (PluginProcessor& p) { set (p, "cutoff", 20000.0f); set (p, "driveCurve", curve); }; };
+    auto wideAtFullDrive = [] (PluginProcessor& p) { set (p, "cutoff", 20000.0f); set (p, "drive", 24.0f); };
+    for (float peak : { 0.25f, 1.0f })
+    {
+        for (float curve : { 0.0f, 1.0f })
+        {
+            const auto reference = clickMeasure (steady (24.0f, curve), changeBlock + 6, 2400, peak);
+            const auto rising = clickMeasure (change ("drive", 0.0f, 24.0f, wide (curve)), changeBlock + 6, 2400, peak);
+            SUCCEED ("click peak " << peak << ", curve " << curve << ", Drive 0 to 24 dB: " << rising << ", steady " << reference);
+            CHECK (rising < 1.2 * reference);
+        }
+        const auto toAsymmetric = clickMeasure (change ("driveCurve", 0.0f, 1.0f, wideAtFullDrive), changeBlock + 6, 2400, peak);
+        const auto asymmetricSteady = clickMeasure (steady (24.0f, 1.0f), changeBlock + 6, 2400, peak);
+        const auto symmetricSteady = clickMeasure (steady (24.0f, 0.0f), changeBlock + 6, 2400, peak);
+        SUCCEED ("click peak " << peak << ", curve change: " << toAsymmetric << ", steady " << symmetricSteady << " and " << asymmetricSteady);
+        CHECK (toAsymmetric < 1.2 * std::max (asymmetricSteady, symmetricSteady));
+    }
+}
+
+TEST_CASE ("An Oversampling change at full Drive does not click", "[plugin][crossfade][drive]")
+{
+    // Post-mortem 0012: filter wide open, Drive 24 dB, both curves: the incoming path has no DC
+    // blocker history. Click measures printed by:
+    // ./Builds/PluginTests "An Oversampling change at full Drive does not click" -s | grep "click"
+    for (float peak : { 0.25f, 1.0f })
+        for (float curve : { 0.0f, 1.0f })
+        {
+            auto driven = [=] (PluginProcessor& p) { set (p, "cutoff", 20000.0f); set (p, "drive", 24.0f); set (p, "driveCurve", curve); };
+            for (auto [from, to] : { std::array<float, 2> { 0.0f, 1.0f }, { 1.0f, 2.0f }, { 2.0f, 0.0f } })
+            {
+                auto held = [=] (float setting) {
+                    return [=] (PluginProcessor& p, int block) { if (block == -1) { driven (p); set (p, "oversampling", setting); } };
+                };
+                const auto measure = clickMeasure (change ("oversampling", from, to, driven), changeBlock + 6, 2400, peak);
+                const auto reference = std::max (clickMeasure (held (from), changeBlock + 6, 2400, peak), clickMeasure (held (to), changeBlock + 6, 2400, peak));
+                SUCCEED ("click peak " << peak << ", curve " << curve << ", setting " << from << " to " << to << ": " << measure << ", steady " << reference);
+                CHECK (measure < 1.2 * reference);
+            }
+        }
+}
