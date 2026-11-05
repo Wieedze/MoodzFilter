@@ -6,24 +6,37 @@
 
 namespace moodz::ui
 {
-    int editorHeightFor (int listHeight, int availableHeight) noexcept
+    int editorHeightFor (int listHeight, int screenHeight) noexcept
     {
-        return availableHeight > 0 ? std::min (listHeight, availableHeight) : listHeight;
+        constexpr int hostTitleBar = 80;
+        constexpr int juceMinimum = 125; // juce_GenericAudioProcessorEditor.cpp
+        const int room = screenHeight > 0 ? std::min (listHeight, screenHeight - hostTitleBar) : listHeight;
+        return std::max (juceMinimum, room);
     }
 
-    namespace
+    int tallestScreenHeight()
     {
-        juce::TreeView* findList (juce::Component& parent)
-        {
-            for (auto* child : parent.getChildren())
-            {
-                if (auto* list = dynamic_cast<juce::TreeView*> (child))
-                    return list;
-                if (auto* inner = findList (*child))
-                    return inner;
-            }
-            return nullptr;
-        }
+        float tallest = 0.0f;
+        for (const auto& display : juce::Desktop::getInstance().getDisplays().displays)
+            tallest = std::max (tallest, display.userBounds.getHeight());
+        return juce::roundToInt (tallest);
+    }
+
+    juce::Viewport* parameterListViewport (juce::Component& genericEditor)
+    {
+        for (auto* child : genericEditor.getChildren())
+            if (auto* list = dynamic_cast<juce::TreeView*> (child))
+                return list->getViewport();
+        return nullptr;
+    }
+
+    void fitEditorToList (juce::AudioProcessorEditor& genericEditor, int screenHeight)
+    {
+        const auto* viewport = parameterListViewport (genericEditor);
+        // A JUCE update changing this layout must not go unnoticed: the tests fail on it too
+        jassert (viewport != nullptr);
+        if (viewport != nullptr)
+            genericEditor.setSize (genericEditor.getWidth(), editorHeightFor (viewport->getViewedComponent()->getHeight(), screenHeight));
     }
 }
 
@@ -31,16 +44,8 @@ namespace moodz::ui
 // Defined in ui/ so that plugin/ does not depend on the editor.
 juce::AudioProcessorEditor* PluginProcessor::createEditor()
 {
-    auto editor = std::make_unique<juce::GenericAudioProcessorEditor> (*this);
-
     // JUCE opens it at 400 pixels at most, whatever the number of parameters (task 0016)
-    if (const auto* list = moodz::ui::findList (*editor))
-        if (const auto* viewport = list->getViewport(); viewport != nullptr && viewport->getViewedComponent() != nullptr)
-        {
-            const auto* display = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay();
-            const int available = display != nullptr ? juce::roundToInt (display->userBounds.getHeight()) : 0;
-            editor->setSize (editor->getWidth(), moodz::ui::editorHeightFor (viewport->getViewedComponent()->getHeight(), available));
-        }
-
+    auto editor = std::make_unique<juce::GenericAudioProcessorEditor> (*this);
+    moodz::ui::fitEditorToList (*editor, moodz::ui::tallestScreenHeight());
     return editor.release();
 }
