@@ -465,6 +465,14 @@ TEST_CASE ("A reset starts the LFO and its grid again", "[dsp][lfo]")
     // Phase 0, value +1 at once
     CHECK (chain->modulatedCutoffHz() == Approx (16000.0f).epsilon (1e-3));
 
+    // And a reset followed by playback from the middle of a cycle starts on that position's value
+    samples.assign (26407, 0.0f);
+    run (*chain, samples);
+    chain->reset();
+    chain->syncLfoToPosition (1.0);
+    chain->process (channels, 1);
+    CHECK (chain->modulatedCutoffHz() == Approx (62.5f).epsilon (1e-3));
+
     // The grid restarts too: a sine moves the cutoff at samples 0, 32, 64..., whatever came before
     auto moving = preparedChain ({ .shape = sine, .rate = 21, .depth = 2.0f });
     samples.assign (7, 0.0f);

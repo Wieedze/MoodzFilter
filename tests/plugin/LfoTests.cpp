@@ -316,18 +316,31 @@ TEST_CASE ("The LFO follows the host tempo", "[plugin][lfo]")
 
 TEST_CASE ("The LFO keeps the last tempo when the host stops giving one", "[plugin][lfo]")
 {
-    // Decision notes of task 0015. 60 BPM for the first block, then no tempo: a 1/4 lasts 48000 samples,
-    // loud at 60040 and quiet at 84040; at 120 BPM these two samples would be the same phase.
-    PluginProcessor processor;
-    setUp (processor, sine, quarter, 2.0f);
-    TestPlayHead head;
-    head.playing = false;
-    head.bpm = 60.0;
-    const auto output = render (processor, &head, 96000, 512, 2000.0, 0.25f, [&] (int start) {
-        if (start == 512)
-            head.hasTempo = false;
-    });
-    CHECK (rmsDb (output, 60040) - rmsDb (output, 84040) > 20.0);
+    // Decision notes of task 0015. 60 BPM for the first block, then no tempo, no position or no play head
+    // at all: a 1/4 lasts 48000 samples, loud at 60040 and quiet at 84040; at 120 BPM these two samples
+    // would be the same phase. Printed by:
+    // ./Builds/PluginTests "The LFO keeps the last tempo when the host stops giving one" -s | grep "swing"
+    for (int kind : { 0, 1, 2 })
+    {
+        PluginProcessor processor;
+        setUp (processor, sine, quarter, 2.0f);
+        TestPlayHead head;
+        head.playing = false;
+        head.bpm = 60.0;
+        const auto output = render (processor, &head, 96000, 512, 2000.0, 0.25f, [&] (int start) {
+            if (start != 512)
+                return;
+            if (kind == 0)
+                head.hasTempo = false;
+            else if (kind == 1)
+                head.hasPosition = false;
+            else
+                processor.setPlayHead (nullptr);
+        });
+        const double measured = rmsDb (output, 60040) - rmsDb (output, 84040);
+        SUCCEED ("swing, loss " << kind << ": " << measured << " dB");
+        CHECK (measured > 20.0);
+    }
 }
 
 TEST_CASE ("A session with a depth starts at that depth", "[plugin][lfo]")
@@ -352,8 +365,7 @@ TEST_CASE ("LFO edges and jumps stay curves", "[plugin][lfo][click]")
     // SPEC success criterion 3. 200 Hz sine, Cytomic SVF Low-pass at 1 kHz, resonance 20 %, depth +4 and -4
     // octaves: a square edge, a sawtooth reset, a position jump (a loop) and a Rate change at -12 and 0 dBFS.
     // Without the slew each jump is 8 octaves in one step. Upward edges measure the most: a square, and a
-    // sawtooth reset at -4 octaves. Maxime heard the square at +/-4 octaves in Live on 2026-11-05 and did
-    // not object. Click measures printed by:
+    // sawtooth reset at -4 octaves. Click measures printed by:
     // ./Builds/PluginTests "LFO edges and jumps stay curves" -s | grep "click"
     for (float depth : { 4.0f, -4.0f })
         for (float peak : { 0.25f, 1.0f })
