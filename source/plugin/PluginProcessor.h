@@ -1,9 +1,10 @@
 #pragma once
 
-#include "dsp/CrossfadingFilterBank.h"
 #include "dsp/FilterModels.h"
+#include "dsp/OversampledFilterChain.h"
 #include "dsp/Realtime.h"
 #include "dsp/SmoothedGain.h"
+#include "dsp/WholeSampleDelay.h"
 #include "plugin/Parameters.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -21,6 +22,9 @@ public:
 
     // Audio thread: checked by RealtimeSanitizer in the RTSan build
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) noexcept MOODZ_NONBLOCKING override;
+
+    // Host bypass: the input delayed by the reported latency, so the track does not shift (ADR 0009)
+    void processBlockBypassed (juce::AudioBuffer<float>&, juce::MidiBuffer&) noexcept MOODZ_NONBLOCKING override;
 
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override;
@@ -50,9 +54,10 @@ private:
     moodz::parameters::Snapshotter snapshotter { state };
     moodz::dsp::SmoothedGain gainOut;
 
-    // Every filter variant prepared once, with a crossfade between them (task 0011): switching
-    // never allocates or calls prepareInstance on the audio thread
-    moodz::dsp::CrossfadingFilterBank filters;
+    // The filter at 1x, 2x or 4x, every filter variant prepared once at each rate, with crossfades
+    // (tasks 0011, 0012): switching never allocates or calls prepareInstance on the audio thread
+    moodz::dsp::OversampledFilterChain filters;
+    moodz::dsp::WholeSampleDelay bypassDelay;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginProcessor)
 };

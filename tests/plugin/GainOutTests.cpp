@@ -29,7 +29,7 @@ TEST_CASE ("Parameter IDs are frozen", "[plugin][parameters]")
 {
     // .claude/rules/juce.md: an ID is never renamed or removed. Adding a parameter means
     // adding its ID here on purpose; a rename or removal makes this test fail.
-    const std::set<std::string> expected { "gainOut", "filterModel", "cutoff", "resonance", "slope", "k35Saturation", "vintageVariant" };
+    const std::set<std::string> expected { "gainOut", "filterModel", "cutoff", "resonance", "slope", "k35Saturation", "vintageVariant", "oversampling" };
 
     PluginProcessor processor;
     std::set<std::string> actual;
@@ -78,6 +78,10 @@ TEST_CASE ("Gain out is applied to both channels", "[plugin][gain]")
 {
     PluginProcessor processor;
     floatParameter (processor, "gainOut") = 6.0f;
+    // Off: the oversampler's pass band ripple (task 0012) would hide the gain alone
+    for (auto* parameter : processor.getParameters())
+        if (auto* choice = dynamic_cast<juce::AudioParameterChoice*> (parameter); choice != nullptr && choice->paramID == "oversampling")
+            *choice = 0;
     processor.prepareToPlay (48000.0, 256);
 
     // Since task 0008 the filter (low pass, 1 kHz by default) precedes Gain out: a constant

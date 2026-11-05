@@ -131,9 +131,13 @@ CPMAddPackage(
     GITHUB_REPOSITORY surge-synthesizer/sst-filters
     GIT_TAG 87a171bcba52c014850848a29174a54f0adc6606
     OPTIONS "SST_FILTERS_BUILD_TESTS OFF" "SST_FILTERS_BUILD_EXAMPLES OFF")
+CPMAddPackage(
+    NAME signalsmith-dsp
+    GITHUB_REPOSITORY Signalsmith-Audio/dsp
+    GIT_TAG v1.7.3)
 # Their headers are third-party: include them as system headers so that the strict
 # warnings of our dsp library (-Werror) apply to our code only
-foreach (sst_target sst-basic-blocks sst-filters)
+foreach (sst_target sst-basic-blocks sst-filters signalsmith-dsp)
     get_target_property(sst_includes ${sst_target} INTERFACE_INCLUDE_DIRECTORIES)
     set_target_properties(${sst_target} PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${sst_includes}")
 endforeach ()
@@ -155,7 +159,7 @@ endforeach ()
 add_library(dsp STATIC ${DspFiles})
 target_include_directories(dsp PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/source")
 target_compile_features(dsp PUBLIC cxx_std_23)
-target_link_libraries(dsp PUBLIC sst-filters)
+target_link_libraries(dsp PUBLIC sst-filters signalsmith-dsp)
 set_target_properties(dsp PROPERTIES CXX_EXTENSIONS OFF POSITION_INDEPENDENT_CODE ON)
 # No fast math here: the dsp layer relies on IEEE behaviour (NaN and infinity checks)
 if (MSVC)

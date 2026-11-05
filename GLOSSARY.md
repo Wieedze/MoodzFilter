@@ -29,6 +29,13 @@ Vocabulary shared between you, the agents and the code (Matt Pocock convention: 
 | **Filter setup** | A `FilterSetup`: one filter model in one configuration. Each entry of the filter list is one, holding its default configuration |
 | **Filter variant** | A filter setup the parameters can reach: the Model entries, plus one per Vintage variant and per Diode Ladder slope step, 17 in all (ADR 0008): `dsp::filterVariants()`. Each has its own prepared filter in the processor; `dsp::chooseFilter` picks one per block |
 | **Crossfade** | When the filter variant changes, the outgoing and incoming variants run side by side for 20 ms and their outputs are mixed linearly, so the change does not click (task 0011) |
+| **Oversampling factor** | How many times the sample rate the filter runs at: 1 (Off), 2 or 4; `dsp::Oversampler` goes up and down with a linear phase FIR |
+| **Oversampled filter chain** | `dsp::OversampledFilterChain`: one crossfading filter bank per oversampling factor, each with its oversampler and its delay to the constant latency, and the crossfade between two of them |
+| **Constant latency** | The one latency the plugin reports at every Oversampling setting: Off and 2x are delayed to the 4x round trip (ADR 0009) |
+| **Round trip** | Up then down through the oversampler: the signal comes back at the base rate, delayed by the stage's latency |
+| **Chunk** | A slice of at most `Oversampler::chunkSize` (256) base samples: `OversampledFilterChain` splits each block into chunks, so no buffer depends on the host's block size |
+| **Pre-roll** | The first samples of an Oversampling crossfade, where the incoming path runs unheard so that its empty start does not click |
+| **Whole sample delay** | `dsp::WholeSampleDelay`: a delay of a whole number of samples, completing Off and 2x to the constant latency and delaying the bypass path |
 | **Crossfading filter bank** | `dsp::CrossfadingFilterBank`: every filter variant prepared once, the selected one playing, and the crossfade between two of them; a choice made during a crossfade waits for it to end |
 | **Click measure** | Largest absolute second difference of the output, `|y[n] − 2 y[n−1] + y[n−2]|`, after a change; a 200 Hz sine at −12 dBFS gives about 1.7e-4 on its own (task 0011 tests) |
 | **Per-model setting** | A parameter that only some models use, ignored by the others: Slope, K35 saturation, Vintage variant (ADR 0008) |
