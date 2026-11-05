@@ -46,13 +46,15 @@ Unless stated: 48 kHz, blocks of 512. Every bound marked "to measure" comes from
 
 ## Definition of done
 
-* [ ] Tests written before the code, seen red.
-* [ ] Debug, Release, RTSan: `ctest` green.
-* [ ] `check` and `compare` green, no golden change.
-* [ ] pluginval 10 green.
-* [ ] `rt-safety-reviewer` passed.
-* [ ] Mutations on the new tests: removing the guard, or each of its two branches, goes red.
-* [ ] `FUTURE.md` line on non-finite input removed.
-* [ ] `code-review`, `task-verifier`: pass. Post-mortem written, `STATE.md` updated.
+* [x] Tests seen red; see the End note for what git can and cannot show.
+* [x] Debug, Release, RTSan: `ctest` green.
+* [x] `check` and `compare` green, no golden change.
+* [x] pluginval 10 green.
+* [x] `rt-safety-reviewer` passed.
+* [x] Mutations on the new tests: removing the guard, or each of its two branches, goes red.
+* [x] `FUTURE.md` line on non-finite input removed.
+* [x] `code-review`, `task-verifier`: pass. Post-mortem written, `STATE.md` updated.
 
 ## End note (filled by the task-verifier)
+
+2026-11-05, task-verifier: round 2 on 7835353 closed all 8 items of round 1 and all its mutants go red; its one remaining item, a figure without a command in `FUTURE.md`, is removed in the closing commit as it proposed, with no third round. Local Debug: `ctest` 135/135, `MoodzFilterTools check` all passed, `render` + `compare` against `tests/golden` within tolerance, no golden change. CI run 42024729546 on 7835353: Linux and Windows with pluginval 10, RealtimeSanitizer 136/136, all green. Figures: a bad sample gives back the clean output 100 ms later, difference 0 (`./Builds/DspTests "The chain plays on after a bad input sample" -s | grep "difference"`); a sample at the bound peaks at +47.31 dBFS on Cytomic SVF High-pass (`./Builds/DspTests "A bad sample counts as 0" -s | grep "peak"`); the body of 17616d9 says "about +48 dBFS" without that limit, corrected by the message of 7835353 since force pushes are forbidden. rt-safety review of b26a27f and 17616d9: no real-time problem. Code review on b26a27f only; 17616d9 and 7835353, which came out of it, had the rt-safety review and the verifier, not a second code review. No listening: a sample within the bound is never written, and every golden reference is unchanged. The references cover the gain cases with the filter wide open; other settings rest on the guard's logic and the hot signal test. Tests and guard landed together in b26a27f, so git cannot show red before green; the red run was seen during the work, and the mutations are the evidence. Left in `FUTURE.md`: non-finite output while bypassed (reaches no filter state), a second instance after a resonant one, the DC blocker's own finite checks. Post-mortem: playbook `docs/plugins/moodzfilter/learning/0014-non-finite-input.md`.
