@@ -38,10 +38,9 @@ TEST_CASE ("On a short screen the editor is held to it and scrolls", "[plugin][u
     CHECK (parameterListViewport (editor)->getVerticalScrollBar().isVisible());
 }
 
-TEST_CASE ("The plugin opens its editor fitted to the screen it knows", "[plugin][ui]")
+TEST_CASE ("The plugin opens the generic editor, resizable", "[plugin][ui]")
 {
-    // createEditor does the fitting, on the tallest screen, and the editor stays the generic one, resizable,
-    // with the width JUCE chose. SPEC interface.
+    // SPEC interface: the generic editor, resizable, with the width JUCE chose. The height is in the next test.
     PluginProcessor processor;
     std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditor());
     juce::GenericAudioProcessorEditor plain (processor);
