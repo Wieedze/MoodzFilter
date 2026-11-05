@@ -186,7 +186,7 @@ TEST_CASE ("The asymmetric curve limits as much in the bass", "[dsp][drive]")
 TEST_CASE ("The asymmetric curve adds even harmonics, the symmetric one does not", "[dsp][drive]")
 {
     // ADR 0009. 1 kHz sine at -12 dBFS, 12 dB, second harmonic against the fundamental over the last
-    // 1 s of 2 s. Printed by: ./Builds/DspTests "The asymmetric curve adds even harmonics, the symmetric one does not" -s | grep "second"
+    // 1 s of 2 s. Printed by: ./Builds/DspTests "The asymmetric curve adds even harmonics\, the symmetric one does not" -s | grep "second"
     const auto input = sine (1000.0, 0.25f, 96000);
     auto secondHarmonicDb = [&] (int curve) {
         InputDrive drive;
@@ -206,7 +206,7 @@ TEST_CASE ("The asymmetric curve leaves no DC offset", "[dsp][drive]")
 {
     // ADR 0009. 1 kHz sine at -6 dBFS, 24 dB: mean over the last 1 s of 2 s, a whole number of
     // periods. Printed by: ./Builds/DspTests "The asymmetric curve leaves no DC offset" -s | grep "mean"
-    // With `blocked = difference` in InputDrive.cpp: -0.29. As it is: 2e-6.
+    // With `blocked = even` in InputDrive.cpp: -0.29. As it is: 7e-7.
     auto output = sine (1000.0, 0.5f, 96000);
     InputDrive drive;
     prepared (drive, 24.0f, asymmetric);
@@ -253,22 +253,42 @@ TEST_CASE ("A Drive change ramps over 20 ms", "[dsp][drive]")
 
     for (std::size_t i = change + rampLength; i < output.size(); ++i)
         REQUIRE (std::abs (output[i] - expected[i]) < 1e-6f);
-    // At the top of a period, where the two differ the most
-    int largest = change + rampLength - 1;
-    while (std::abs (input[static_cast<std::size_t> (largest)]) < 0.2f)
-        --largest;
-    CHECK (std::abs (output[static_cast<std::size_t> (largest)] - expected[static_cast<std::size_t> (largest)]) > 1e-6f);
     // Nothing moves before the change
     for (std::size_t i = 0; i < change; ++i)
         REQUIRE (std::abs (output[i] - input[i]) < 1e-7f);
 }
 
+TEST_CASE ("A change between two Drive values ramps the gain over 20 ms", "[dsp][drive]")
+{
+    // Task 0013 verifier: 6 to 24 dB, where the blend is already all saturated, so only the gain moves.
+    // Constant 0.01, in the near linear part of tanh, so the output follows the gain. The ramp lands on
+    // its last sample, change + 959 (sample 960 of the ramp), within the row's 1 sample.
+    constexpr int change = 2048;
+    InputDrive drive;
+    prepared (drive, 6.0f, symmetric);
+    std::vector<float> output (8192, 0.01f);
+    std::span<float> all { output };
+    run (drive, all.first (change));
+    drive.setDriveDb (24.0f);
+    run (drive, all.subspan (change));
+
+    InputDrive target;
+    prepared (target, 24.0f, symmetric);
+    std::vector<float> expected (8192, 0.01f);
+    run (target, expected);
+    for (std::size_t i = change + rampLength - 1; i < output.size(); ++i)
+        REQUIRE (std::abs (output[i] - expected[i]) < 1e-6f);
+    CHECK (std::abs (output[change + rampLength - 3] - expected[change + rampLength - 3]) > 1e-5f);
+    // Half way, half way: 0.01 x (2 + 15.85) / 2, within tanh's curve at this level
+    CHECK (output[change + rampLength / 2] == Approx (0.0892).margin (2e-3));
+}
+
 TEST_CASE ("A Drive curve change blends over 20 ms", "[dsp][drive]")
 {
-    // No reset: from the change + 960 samples the output has the curve of the target. Compared on
-    // the second half, once the DC blockers of both runs have settled to the same state.
+    // No reset, and the DC blockers run whatever the curve: from the change + 959 samples the output
+    // is exactly the one of the target curve, and two samples before it is not (task 0013 verifier).
     constexpr int change = 2048;
-    const auto input = sine (1000.0, 0.25f, 96000);
+    const auto input = sine (1000.0, 0.25f, 8192);
     InputDrive drive;
     prepared (drive, 24.0f, symmetric);
     auto output = input;
@@ -281,8 +301,9 @@ TEST_CASE ("A Drive curve change blends over 20 ms", "[dsp][drive]")
     prepared (target, 24.0f, asymmetric);
     auto expected = input;
     run (target, expected);
-    for (std::size_t i = 48000; i < output.size(); ++i)
-        REQUIRE (std::abs (output[i] - expected[i]) < 1e-3f);
+    for (std::size_t i = change + rampLength - 1; i < output.size(); ++i)
+        REQUIRE (std::abs (output[i] - expected[i]) < 1e-6f);
+    CHECK (std::abs (output[change + rampLength - 3] - expected[change + rampLength - 3]) > 1e-5f);
 }
 
 TEST_CASE ("The DC blocker keeps no non-finite value", "[dsp][drive]")
@@ -301,10 +322,10 @@ TEST_CASE ("The DC blocker keeps no non-finite value", "[dsp][drive]")
     }
 }
 
-TEST_CASE ("Huge finite samples do not stick in the DC blocker", "[dsp][drive]")
+TEST_CASE ("Huge finite samples leave nothing behind in the input drive", "[dsp][drive]")
 {
-    // rt-safety review of task 0013: +3e38 then -3e38 overflowed the blocker's own arithmetic, at
-    // a Drive that lets them through
+    // rt-safety review of task 0013: +3e38 then -3e38 stuck in the blocker when it took the whole
+    // curve minus the input; the even part it takes now is bounded (at most 0.32 in magnitude)
     InputDrive drive;
     prepared (drive, 24.0f, asymmetric);
     auto output = sine (1000.0, 0.25f, 4096);
@@ -315,24 +336,37 @@ TEST_CASE ("Huge finite samples do not stick in the DC blocker", "[dsp][drive]")
         REQUIRE (std::isfinite (output[i]));
 }
 
-TEST_CASE ("One channel's signal does not reach the other", "[dsp][drive]")
+TEST_CASE ("Each channel is driven alike and on its own", "[dsp][drive]")
 {
-    // SPEC: linked stereo, one gain; the DC blockers stay separate
+    // SPEC: linked stereo, one gain; the DC blockers stay separate. Each channel of a stereo run
+    // equals the same signal driven alone, and silence next to a signal stays silence.
+    auto driven = [] (std::vector<float> samples) {
+        InputDrive alone;
+        prepared (alone, 24.0f, asymmetric);
+        run (alone, samples);
+        return samples;
+    };
     InputDrive drive;
     prepared (drive, 24.0f, asymmetric);
     auto left = sine (1000.0, 0.25f, 4096);
-    std::vector<float> right (4096, 0.0f);
+    auto right = sine (300.0, 0.125f, 4096);
+    const auto expectedLeft = driven (left), expectedRight = driven (right);
     const std::array<std::span<float>, 2> channels { std::span<float> { left }, std::span<float> { right } };
     drive.process (channels, 4096);
-    for (auto s : right)
-        REQUIRE (std::abs (s) < 1e-7f);
+    for (std::size_t i = 0; i < left.size(); ++i)
+    {
+        REQUIRE (std::abs (left[i] - expectedLeft[i]) < 1e-7f);
+        REQUIRE (std::abs (right[i] - expectedRight[i]) < 1e-7f);
+    }
 
-    InputDrive alone;
-    prepared (alone, 24.0f, asymmetric);
-    auto mono = sine (1000.0, 0.25f, 4096);
-    run (alone, mono);
-    for (std::size_t i = 0; i < mono.size(); ++i)
-        REQUIRE (std::abs (mono[i] - left[i]) < 1e-7f);
+    InputDrive next;
+    prepared (next, 24.0f, asymmetric);
+    auto signal = sine (1000.0, 0.25f, 4096);
+    std::vector<float> silence (4096, 0.0f);
+    const std::array<std::span<float>, 2> mixed { std::span<float> { signal }, std::span<float> { silence } };
+    next.process (mixed, 4096);
+    for (auto sample : silence)
+        REQUIRE (std::abs (sample) < 1e-7f);
 }
 
 TEST_CASE ("Drive values out of range are bounded", "[dsp][drive]")

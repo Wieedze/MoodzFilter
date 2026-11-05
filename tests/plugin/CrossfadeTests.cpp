@@ -208,8 +208,7 @@ TEST_CASE ("Drive and Drive curve changes do not click", "[plugin][crossfade][dr
 
 TEST_CASE ("An Oversampling change at full Drive does not click", "[plugin][crossfade][drive]")
 {
-    // Post-mortem 0012: filter wide open, Drive 24 dB, both curves: the incoming path has no DC
-    // blocker history. Click measures printed by:
+    // Post-mortem 0012: filter wide open, Drive 24 dB, both curves. Click measures printed by:
     // ./Builds/PluginTests "An Oversampling change at full Drive does not click" -s | grep "click"
     for (float peak : { 0.25f, 1.0f })
         for (float curve : { 0.0f, 1.0f })
@@ -286,7 +285,8 @@ TEST_CASE ("A Drive curve change at full Drive leaves no low-frequency bump", "[
 
 TEST_CASE ("An Oversampling change at full Drive leaves no low-frequency bump", "[plugin][crossfade][drive]")
 {
-    // Code review of task 0013: the incoming path takes over the DC estimate of the outgoing one. Printed by:
+    // Code review of task 0013: the incoming path takes over the DC estimate of the outgoing one.
+    // Without takeDcEstimateFrom in OversampledFilterChain.cpp: 0.07 to 0.09. Printed by:
     // ./Builds/PluginTests "An Oversampling change at full Drive leaves no low-frequency bump" -s | grep "bump"
     auto driven = [] (PluginProcessor& p) { set (p, "drive", 24.0f); set (p, "driveCurve", 1.0f); };
     for (float peak : { 0.25f, 1.0f })

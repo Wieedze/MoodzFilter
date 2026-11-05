@@ -3,9 +3,12 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <cmath>
+#include <functional>
 #include <limits>
 #include <numbers>
+#include <vector>
 
 namespace
 {
@@ -86,4 +89,66 @@ TEST_CASE ("A state saved before the drive loads with its defaults", "[plugin][d
     CHECK (parameter<juce::AudioParameterFloat> (processor, "drive").get() == Catch::Approx (0.0f));
     CHECK (parameter<juce::AudioParameterChoice> (processor, "driveCurve").getIndex() == 0);
     CHECK (parameter<juce::AudioParameterFloat> (processor, "cutoff").get() == Catch::Approx (5000.0f).margin (0.01));
+}
+
+TEST_CASE ("Drive and Drive curve changes during playback reach the output", "[plugin][drive]")
+{
+    // Task 0013 verifier: the click tests only set upper bounds, so they pass if a change never
+    // arrives. 1 kHz sine at -12 dBFS, Off, cutoff 20 kHz: Drive moved to 24 dB at block 10 and the curve
+    // to Asymmetric at block 50. The last 512 samples of each stage equal a render set from the start.
+    auto render = [] (const std::function<void (PluginProcessor&, int)>& onBlock, int blocks) {
+        PluginProcessor processor;
+        parameter<juce::AudioParameterFloat> (processor, "cutoff") = 20000.0f;
+        parameter<juce::AudioParameterChoice> (processor, "oversampling") = 0;
+        onBlock (processor, -1);
+        processor.prepareToPlay (48000.0, 512);
+        juce::AudioBuffer<float> buffer (2, 512);
+        juce::MidiBuffer midi;
+        std::vector<float> output;
+        for (int block = 0; block < blocks; ++block)
+        {
+            onBlock (processor, block);
+            for (int channel = 0; channel < 2; ++channel)
+                for (int i = 0; i < 512; ++i)
+                    buffer.setSample (channel, i, 0.25f * static_cast<float> (std::sin (2.0 * std::numbers::pi * 1000.0 * (block * 512 + i) / 48000.0)));
+            processor.processBlock (buffer, midi);
+            output.insert (output.end(), buffer.getReadPointer (0), buffer.getReadPointer (0) + 512);
+        }
+        return output;
+    };
+    auto largestDifference = [] (const std::vector<float>& a, const std::vector<float>& b, std::size_t from) {
+        float largest = 0.0f;
+        for (std::size_t i = from; i < from + 512; ++i)
+            largest = std::max (largest, std::abs (a[i] - b[i]));
+        return largest;
+    };
+
+    const auto moved = render ([] (PluginProcessor& p, int block) {
+        if (block == 10)
+            parameter<juce::AudioParameterFloat> (p, "drive") = 24.0f;
+        if (block == 50)
+            parameter<juce::AudioParameterChoice> (p, "driveCurve") = 1;
+    },
+        60);
+    const auto clean = render ([] (PluginProcessor&, int) {}, 60);
+    const auto symmetric = render ([] (PluginProcessor& p, int block) {
+        if (block == -1)
+            parameter<juce::AudioParameterFloat> (p, "drive") = 24.0f;
+    },
+        60);
+    const auto asymmetric = render ([] (PluginProcessor& p, int block) {
+        if (block == -1)
+        {
+            parameter<juce::AudioParameterFloat> (p, "drive") = 24.0f;
+            parameter<juce::AudioParameterChoice> (p, "driveCurve") = 1;
+        }
+    },
+        60);
+
+    constexpr std::size_t beforeCurve = 49 * 512, atTheEnd = 59 * 512;
+    CHECK (largestDifference (moved, clean, 9 * 512) < 1e-6f);
+    CHECK (largestDifference (moved, clean, beforeCurve) > 0.1f);
+    CHECK (largestDifference (moved, symmetric, beforeCurve) < 1e-3f);
+    CHECK (largestDifference (moved, symmetric, atTheEnd) > 0.1f);
+    CHECK (largestDifference (moved, asymmetric, atTheEnd) < 1e-3f);
 }

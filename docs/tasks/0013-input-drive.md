@@ -17,7 +17,7 @@ Unless stated: 48 kHz, blocks of 512. Every bound marked "to measure" comes from
 | Drive 0 dB, both curves, noise | output equal to the input | 1e-7 | ADR 0009, transparent at 0 dB |
 | `check`, `render`, `compare` with Drive at its default | every reference unchanged, no `golden:` commit | manifest tolerances | ADR 0003 |
 | Symmetric, 12 dB, single samples 0.5 and -0.5 | ±0.9633 = ±tanh(10^(12/20) × 0.5) | 1e-4 | Curve definition below; the value comes from the Python command in the test |
-| Asymmetric, 12 dB, first sample 0.5, then -0.5 | 0.7523, then -1.3390 | 1e-3 | Same |
+| Asymmetric, 12 dB, first sample 0.5, and first sample -0.5 after a reset | 0.7523, and -1.3392 | 1e-3 | Same |
 | Both curves, 12 dB, sample 0.001 | 0.00398 (the drive gain: same small signal level) | 1e-5 | Same |
 | Symmetric 3 dB, sample 0.5 | 0.5541 (half dry, half saturated) | 1e-3 | Decision notes |
 | 1 kHz sine, −12 dBFS, Drive 0 to 24 dB in steps of 0.5 dB | RMS never falls as Drive rises; no step above 1.5 dB | to measure | No hole in the Drive travel |
@@ -27,10 +27,12 @@ Unless stated: 48 kHz, blocks of 512. Every bound marked "to measure" comes from
 | Drive 0 to 24 dB in one block, same signal | largest 5 ms mean under 0.2 Asymmetric, under 0.06 Symmetric (the amplitude rising, no offset) | to measure | The worst case, for the listening |
 | 1 kHz sine, −12 dBFS, 12 dB | second harmonic: Symmetric under −100 dB, Asymmetric above −50 dB, against the fundamental | to measure | ADR 0009 (even harmonics) |
 | Asymmetric, 24 dB, 1 kHz sine at −6 dBFS, last second of 2 s | mean of the output near 0 | to measure, against the run without the DC blocker | ADR 0009 (DC offset to remove) |
-| Silence, 24 dB, both curves | exactly silence | exact | A saturator adds nothing to nothing |
-| Drive change, sine | equal to the target's output from 20 ms after the change, not before | ± 1 sample, 1e-6 | SPEC (Drive smoothed), same ramp time as Gain out |
+| Silence, 24 dB, both curves | silence | 1e-9 | A saturator adds nothing to nothing |
+| Drive change 0 to 24 dB (sine), 6 to 24 dB (constant 0.01), curve change at 24 dB (sine) | equal to the target's output from 20 ms after the change, not before | ± 1 sample, 1e-6 | SPEC (Drive smoothed), same ramp time as Gain out |
+| Drive and curve moved during playback in the plugin, 1 kHz sine | the output changes, and ends equal to a render set from the start | 1e-3 | Task 0013 verifier: the click bounds alone pass if a change never arrives |
+| Chain, 100 Hz sine at −6 dBFS, 24 dB, Cytomic SVF Low-pass at 300 Hz | 9th harmonic under −40 dB against the fundamental: the filter comes after the drive | to measure | SPEC signal chain |
 | `InputDrive` alone, a non-finite input sample or ±3e38, Asymmetric | later samples finite: the DC blocker keeps nothing | exact | `.claude/rules/dsp.md`, rt-safety review. The filter downstream is not covered: `FUTURE.md` |
-| Stereo | one channel's signal does not reach the other; the same settings on both | 1e-7 | SPEC (linked stereo) |
+| Stereo, different signals | each channel equals the same signal driven alone; silence next to a signal stays silence | 1e-7 | SPEC (linked stereo) |
 | Chain at Off, 2x, 4x, 24 dB, 5 kHz sine, cutoff 20 kHz | largest alias up to 20 kHz: 2x under Off and 4x under 2x, by at least 6 dB each; 4x under −70 dB against the fundamental | to measure | `.claude/rules/dsp.md` (nonlinearities are oversampled) |
 | Chain, block sizes 1, 7, 64, 480, 512, 2048, with a Drive change and a factor change | identical output | 1e-6 | `.claude/rules/dsp.md` |
 | Drive 0 to 24 dB, curve change at 24 dB, Oversampling change at 24 dB, 200 Hz sine, cutoff 20 kHz | click measure at most 20 % above the same setting held steady | to measure | SPEC success criterion 3, post-mortem 0012 (filter wide open, full level) |

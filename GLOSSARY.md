@@ -37,6 +37,8 @@ Vocabulary shared between you, the agents and the code (Matt Pocock convention: 
 | **Input drive** | `dsp::InputDrive`: the saturation before the filter, inside the oversampling, set by the Drive parameter, 0 to 24 dB; transparent at 0 dB |
 | **Drive curve** | The shape of the saturation: Symmetric (tanh, odd harmonics) or Asymmetric (biased tanh, even harmonics too) (ADR 0009) |
 | **DC blocker** | A one-pole high-pass at 10 Hz in the input drive, removing the offset the Asymmetric curve adds, without filtering the dry signal |
+| **Even part, odd part** | The two halves of the Asymmetric curve: the odd part limits the signal, the even part holds the offset and the even harmonics, and alone goes through the DC blocker |
+| **Bump measure** | Largest absolute mean of the output over any 5 ms after a change, on a 200 Hz sine, whose own mean over that time is 0: sees the low-frequency bump the click measure cannot (`bumpMeasure`, task 0013 tests) |
 | **Pre-roll** | The first samples of an Oversampling crossfade, where the incoming path runs unheard so that its empty start does not click |
 | **Whole sample delay** | `dsp::WholeSampleDelay`: a delay of a whole number of samples, completing Off and 2x to the constant latency and delaying the bypass path |
 | **Crossfading filter bank** | `dsp::CrossfadingFilterBank`: every filter variant prepared once, the selected one playing, and the crossfade between two of them; a choice made during a crossfade waits for it to end |

@@ -359,3 +359,26 @@ TEST_CASE ("The oversampled chain with drive does not depend on the block size",
     const auto undriven = renderAt (2048, 0.0f);
     CHECK (largestDifference (undriven, reference, 4096, 6144) > 0.01f);
 }
+
+TEST_CASE ("The drive comes before the filter", "[dsp][oversampling][drive]")
+{
+    // SPEC signal chain, task 0013 verifier: every other chain test runs wide open, where the order
+    // does not show. 100 Hz sine at -6 dBFS, Drive 24 dB, Cytomic SVF Low-pass at 300 Hz, resonance 0:
+    // the filter takes the harmonics of the drive, so the 9th (900 Hz) stays far under what tanh makes
+    // on its own, -23 dB against the fundamental:
+    // python3 -c "from math import *; h=lambda n:abs(sum(tanh(10**1.2*.5*sin(2*pi*i/4000))*sin(2*pi*n*i/4000) for i in range(4000))); print(20*log10(h(9)/h(1)))"
+    // Printed by: ./Builds/DspTests "The drive comes before the filter" -s | grep "ninth"
+    auto samples = sineAt (100.0, 0.5f, 96000);
+    auto chain = preparedChain (twice, cytomicLowPass, 300.0f, 0.0f);
+    chain->setDriveDb (24.0f);
+    chain->reset();
+    for (int start = 0; start < 96000; start += 512)
+    {
+        const int length = std::min (512, 96000 - start);
+        const std::array<std::span<float>, 1> channels { std::span<float> { samples }.subspan (static_cast<size_t> (start), static_cast<size_t> (length)) };
+        chain->process (channels, length);
+    }
+    const double db = 20.0 * std::log10 (amplitudeAt (samples, 48000, 900.0) / amplitudeAt (samples, 48000, 100.0));
+    SUCCEED ("ninth harmonic " << db << " dB");
+    CHECK (db < -40.0);
+}
