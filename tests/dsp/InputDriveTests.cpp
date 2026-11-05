@@ -119,11 +119,12 @@ TEST_CASE ("The Drive curves follow their definitions", "[dsp][drive]")
 
 TEST_CASE ("Drive has no hole in its travel", "[dsp][drive]")
 {
-    // 1 kHz sine at -12 dBFS, Drive 0 to 24 dB in steps of 0.5 dB: the RMS never falls, for either curve
+    // 1 kHz sine at -12 dBFS, Drive 0 to 24 dB in steps of 0.5 dB: the RMS never falls and no step
+    // jumps, for either curve. Largest step printed by: ./Builds/DspTests "Drive has no hole in its travel" -s | grep "largest"
     const auto input = sine (1000.0, 0.25f, 4800);
     for (int curve : { symmetric, asymmetric })
     {
-        double previous = 0.0;
+        double previous = 0.0, largestStepDb = 0.0;
         for (float db = 0.0f; db <= 24.0f; db += 0.5f)
         {
             InputDrive drive;
@@ -133,8 +134,52 @@ TEST_CASE ("Drive has no hole in its travel", "[dsp][drive]")
             const double level = rms (std::span<const float> { output }.subspan (2400));
             INFO ("curve " << curve << ", " << db << " dB, RMS " << level);
             CHECK (level >= previous);
+            if (previous > 0.0)
+                largestStepDb = std::max (largestStepDb, 20.0 * std::log10 (level / previous));
             previous = level;
         }
+        SUCCEED ("largest step curve " << curve << ": " << largestStepDb << " dB");
+        CHECK (largestStepDb < 1.5);
+    }
+}
+
+TEST_CASE ("A full scale signal barely dips at low Drive", "[dsp][drive]")
+{
+    // 0 dBFS sine: saturation lowers the peaks before the gain makes up for it, so the level may dip
+    // slightly under the dry level. Printed by: ./Builds/DspTests "A full scale signal barely dips at low Drive" -s | grep "dip"
+    const auto input = sine (1000.0, 1.0f, 4800);
+    const double dry = rms (std::span<const float> { input }.subspan (2400));
+    for (int curve : { symmetric, asymmetric })
+    {
+        double lowest = dry;
+        for (float db = 0.0f; db <= 24.0f; db += 0.5f)
+        {
+            InputDrive drive;
+            prepared (drive, db, curve);
+            auto output = input;
+            run (drive, output);
+            lowest = std::min (lowest, rms (std::span<const float> { output }.subspan (2400)));
+        }
+        const double dipDb = 20.0 * std::log10 (lowest / dry);
+        SUCCEED ("dip curve " << curve << ": " << dipDb << " dB");
+        CHECK (dipDb > -0.5);
+    }
+}
+
+TEST_CASE ("The asymmetric curve limits as much in the bass", "[dsp][drive]")
+{
+    // Code review of task 0013: 0 dBFS sine, 24 dB, last second of 2 s. The curve's own range is -1.41
+    // to 0.77 (-1 / (1 - 0.2913), 1 / (1 + 0.2913)), a span of 2.18. A DC blocker on the whole curve
+    // overshoots in the bass (3.3 at 20 Hz, 2.9 at 40 Hz); on the even part alone it does not. Printed by: ./Builds/DspTests "The asymmetric curve limits as much in the bass" -s | grep "span"
+    for (double frequency : { 20.0, 40.0, 1000.0 })
+    {
+        auto output = sine (frequency, 1.0f, 96000);
+        InputDrive drive;
+        prepared (drive, 24.0f, asymmetric);
+        run (drive, output);
+        const auto [low, high] = std::minmax_element (output.begin() + 48000, output.end());
+        SUCCEED ("span at " << frequency << " Hz: " << *high - *low);
+        CHECK (*high - *low < 2.3f);
     }
 }
 
@@ -242,7 +287,8 @@ TEST_CASE ("A Drive curve change blends over 20 ms", "[dsp][drive]")
 
 TEST_CASE ("The DC blocker keeps no non-finite value", "[dsp][drive]")
 {
-    // .claude/rules/dsp.md: one NaN or infinite input sample must not poison the later samples
+    // .claude/rules/dsp.md: one NaN or infinite input sample must not poison the later samples. The
+    // whole plugin is another matter: the filter keeps it (FUTURE.md).
     for (float bad : { std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity() })
     {
         InputDrive drive;
@@ -253,6 +299,20 @@ TEST_CASE ("The DC blocker keeps no non-finite value", "[dsp][drive]")
         for (std::size_t i = 101; i < output.size(); ++i)
             REQUIRE (std::isfinite (output[i]));
     }
+}
+
+TEST_CASE ("Huge finite samples do not stick in the DC blocker", "[dsp][drive]")
+{
+    // rt-safety review of task 0013: +3e38 then -3e38 overflowed the blocker's own arithmetic, at
+    // a Drive that lets them through
+    InputDrive drive;
+    prepared (drive, 24.0f, asymmetric);
+    auto output = sine (1000.0, 0.25f, 4096);
+    output[100] = 3e38f;
+    output[101] = -3e38f;
+    run (drive, output);
+    for (std::size_t i = 102; i < output.size(); ++i)
+        REQUIRE (std::isfinite (output[i]));
 }
 
 TEST_CASE ("One channel's signal does not reach the other", "[dsp][drive]")

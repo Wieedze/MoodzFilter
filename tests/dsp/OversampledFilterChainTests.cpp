@@ -320,17 +320,22 @@ TEST_CASE ("The oversampled chain with drive does not depend on the block size",
     // .claude/rules/dsp.md: Drive up at 2048, the curve at 4096, the factor at 6144, Drive down to
     // 0 dB at 8192 and up again at 12288, past the rest state
     const auto input = noise (16384, 83u);
-    auto renderAt = [&] (int blockSize) {
+    auto renderAt = [&] (int blockSize, float peakDriveDb) {
         auto samples = input;
         auto chain = preparedChain (off, cytomicLowPass, 5000.0f, 0.5f);
         const int total = static_cast<int> (samples.size());
         int start = 0;
         auto apply = [&] (int at) {
-            if (at == 2048) chain->setDriveDb (24.0f);
-            if (at == 4096) chain->setDriveCurveIndex (asymmetricCurve);
-            if (at == 6144) chain->setFactorIndex (fourTimes);
-            if (at == 8192) chain->setDriveDb (0.0f);
-            if (at == 12288) chain->setDriveDb (12.0f);
+            if (at == 2048)
+                chain->setDriveDb (peakDriveDb);
+            if (at == 4096)
+                chain->setDriveCurveIndex (asymmetricCurve);
+            if (at == 6144)
+                chain->setFactorIndex (fourTimes);
+            if (at == 8192)
+                chain->setDriveDb (0.0f);
+            if (at == 12288)
+                chain->setDriveDb (peakDriveDb / 2.0f);
         };
         while (start < total)
         {
@@ -343,15 +348,14 @@ TEST_CASE ("The oversampled chain with drive does not depend on the block size",
         }
         return samples;
     };
-    const auto reference = renderAt (2048);
+    const auto reference = renderAt (2048, 24.0f);
     for (int blockSize : { 1, 7, 64, 480, 512 })
     {
         INFO ("block size " << blockSize);
-        const auto output = renderAt (blockSize);
+        const auto output = renderAt (blockSize, 24.0f);
         CHECK (largestDifference (output, reference, 0, output.size()) < 1e-6f);
     }
-    CHECK (rms (reference, 2048) > 0.0);
-    // Drive really acts in this signal: the same render without Drive differs
-    const auto undriven = render (off, cytomicLowPass, { { 6144, fourTimes, cytomicLowPass } }, input, 2048);
+    // Drive really acts in this signal: the same render with Drive at 0 dB differs
+    const auto undriven = renderAt (2048, 0.0f);
     CHECK (largestDifference (undriven, reference, 4096, 6144) > 0.01f);
 }

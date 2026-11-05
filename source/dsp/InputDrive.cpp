@@ -15,15 +15,15 @@ namespace moodz::dsp
         constexpr float biasTanh = 0.29131261f;
 
         // (tanh (u + b) - tanh (b)) / (1 - tanh^2 (b)), written with the tanh addition formula as
-        // t / (1 + t tanh (b)), t = tanh (u): exactly 0 at 0, and the denominator stays above 0
-        float asymmetricCurve (float t) noexcept MOODZ_NONBLOCKING
-        {
-            return t / (1.0f + t * biasTanh);
-        }
+        // t / (1 + t tanh (b)), t = tanh (u): exactly 0 at 0, and the denominator stays above 0.
+        // Split in its odd part t / D and its even part -tanh (b) t^2 / D, D = 1 - tanh^2 (b) t^2:
+        // only the even part holds the offset, so only it goes through the DC blocker.
+        constexpr float biasTanhSquared = biasTanh * biasTanh;
     }
 
-    void InputDrive::Ramp::setTarget (float newTarget, int length) noexcept MOODZ_NONBLOCKING
+    void InputDrive::Ramp::setTarget (float newTarget, int newLength) noexcept MOODZ_NONBLOCKING
     {
+        length = newLength;
         target = newTarget;
         start = value;
         step = (target - value) / static_cast<float> (length);
@@ -37,7 +37,7 @@ namespace moodz::dsp
         left = 0;
     }
 
-    void InputDrive::Ramp::advance (int length) noexcept MOODZ_NONBLOCKING
+    void InputDrive::Ramp::advance() noexcept MOODZ_NONBLOCKING
     {
         if (left > 0)
         {
@@ -90,14 +90,21 @@ namespace moodz::dsp
             curve.setTarget (newTarget, rampLength);
     }
 
+    void InputDrive::takeDcEstimateFrom (const InputDrive& other) noexcept MOODZ_NONBLOCKING
+    {
+        // previousInput - previousOutput is what the blocker removes
+        for (std::size_t c = 0; c < dcBlockers.size(); ++c)
+            dcBlockers[c] = { other.dcBlockers[c].previousInput - other.dcBlockers[c].previousOutput, 0.0f };
+    }
+
     void InputDrive::process (std::span<const std::span<float>> channels, int numSamples) noexcept MOODZ_NONBLOCKING
     {
         const auto numChannels = std::min (channels.size(), dcBlockers.size());
         for (int i = 0; i < numSamples; ++i)
         {
-            gain.advance (rampLength);
-            wet.advance (rampLength);
-            curve.advance (rampLength);
+            gain.advance();
+            wet.advance();
+            curve.advance();
             // At rest at 0 dB: the signal is left as it is, and a curve change has nothing to blend
             if (wet.value <= 0.0f && wet.left == 0)
             {
@@ -106,32 +113,25 @@ namespace moodz::dsp
                 return;
             }
 
-            const bool symmetricHeard = curve.value < 1.0f;
-            const bool asymmetricHeard = curve.value > 0.0f || curve.left > 0;
-            if (!asymmetricHeard)
-                clearDcBlockers();
             const auto index = static_cast<std::size_t> (i);
             for (std::size_t c = 0; c < numChannels; ++c)
             {
                 const float x = channels[c][index];
                 const float t = std::tanh (gain.value * x);
-                float saturated = 0.0f;
-                if (symmetricHeard)
-                    saturated += (1.0f - curve.value) * (t - x);
-                if (asymmetricHeard)
-                {
-                    // The DC blocker works on the difference only, so the dry signal is never filtered;
-                    // y[n] = x[n] - x[n-1] + R y[n-1]: J. O. Smith, Introduction to Digital Filters, "DC Blocker"
-                    float difference = asymmetricCurve (t) - x;
-                    if (!std::isfinite (difference))
-                        difference = 0.0f;
-                    auto& blocker = dcBlockers[c];
-                    const float blocked = difference - blocker.previousInput + dcCoefficient * blocker.previousOutput;
-                    blocker.previousInput = difference;
-                    blocker.previousOutput = blocked;
-                    saturated += curve.value * blocked;
-                }
-                channels[c][index] = x + wet.value * saturated;
+                const float denominator = 1.0f - biasTanhSquared * t * t;
+                const float odd = t / denominator;
+                const float even = -biasTanh * t * t / denominator;
+                // The DC blocker works on the even part alone: the dry signal and the limiting odd part
+                // are never filtered. It keeps running on Symmetric, so a curve change finds it settled.
+                // y[n] = x[n] - x[n-1] + R y[n-1]: J. O. Smith, Introduction to Digital Filters, "DC Blocker"
+                auto& blocker = dcBlockers[c];
+                const float blocked = even - blocker.previousInput + dcCoefficient * blocker.previousOutput;
+                if (std::isfinite (blocked))
+                    blocker = { even, blocked };
+                else
+                    blocker = {};
+                const float asymmetric = odd + (std::isfinite (blocked) ? blocked : 0.0f);
+                channels[c][index] = x + wet.value * ((1.0f - curve.value) * t + curve.value * asymmetric - x);
             }
         }
     }

@@ -27,6 +27,10 @@ namespace moodz::dsp
         // Bounded to the curve list.
         void setCurveIndex (int index) noexcept MOODZ_NONBLOCKING;
 
+        // An incoming path starts from what the outgoing one has learned, so its DC blockers do not
+        // pass the whole offset while they settle (task 0013 code review).
+        void takeDcEstimateFrom (const InputDrive& other) noexcept MOODZ_NONBLOCKING;
+
         // One or two channels; every span holds at least numSamples samples.
         void process (std::span<const std::span<float>> channels, int numSamples) noexcept MOODZ_NONBLOCKING;
 
@@ -39,10 +43,11 @@ namespace moodz::dsp
             float target = 0.0f;
             float step = 0.0f;
             int left = 0;
+            int length = 1;
 
-            void setTarget (float newTarget, int length) noexcept MOODZ_NONBLOCKING;
+            void setTarget (float newTarget, int newLength) noexcept MOODZ_NONBLOCKING;
             void jump() noexcept MOODZ_NONBLOCKING;
-            void advance (int length) noexcept MOODZ_NONBLOCKING;
+            void advance() noexcept MOODZ_NONBLOCKING;
         };
 
         struct DcBlocker

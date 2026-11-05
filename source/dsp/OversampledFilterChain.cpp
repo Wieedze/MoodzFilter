@@ -83,6 +83,7 @@ namespace moodz::dsp
             outgoing = current;
             current = pending;
             startPath (current);
+            paths[current].drive.takeDcEstimateFrom (paths[outgoing].drive);
             crossfadePosition = 0;
         }
         paths[current].filters.select (choice);

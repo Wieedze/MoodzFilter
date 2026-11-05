@@ -20,12 +20,16 @@ Unless stated: 48 kHz, blocks of 512. Every bound marked "to measure" comes from
 | Asymmetric, 12 dB, first sample 0.5, then -0.5 | 0.7523, then -1.3390 | 1e-3 | Same |
 | Both curves, 12 dB, sample 0.001 | 0.00398 (the drive gain: same small signal level) | 1e-5 | Same |
 | Symmetric 3 dB, sample 0.5 | 0.5541 (half dry, half saturated) | 1e-3 | Decision notes |
-| 1 kHz sine, −12 dBFS, Drive 0 to 24 dB in steps of 0.5 dB | RMS never falls as Drive rises, no jump at 6 dB | to measure | No hole in the Drive travel |
+| 1 kHz sine, −12 dBFS, Drive 0 to 24 dB in steps of 0.5 dB | RMS never falls as Drive rises; no step above 1.5 dB | to measure | No hole in the Drive travel |
+| 1 kHz sine, 0 dBFS, same steps | the level dips under the dry level by less than 0.5 dB: saturation limits the peaks before the gain makes up for it | to measure | Code review; above full scale the dip is larger, that is the saturation working |
+| Asymmetric, 24 dB, 0 dBFS, sines at 20 Hz, 40 Hz, 1 kHz | peak to peak under 2.3, the bass limited like the rest | to measure | Code review |
+| Curve change and Oversampling change at 24 dB, 200 Hz sine, −12 and 0 dBFS | largest 5 ms mean under 0.01 for the curve, 0.005 for Oversampling, the sine averaged out | to measure | Code review; red before the fix: 0.07 to 0.09 |
+| Drive 0 to 24 dB in one block, same signal | largest 5 ms mean under 0.2 Asymmetric, under 0.06 Symmetric (the amplitude rising, no offset) | to measure | The worst case, for the listening |
 | 1 kHz sine, −12 dBFS, 12 dB | second harmonic: Symmetric under −100 dB, Asymmetric above −50 dB, against the fundamental | to measure | ADR 0009 (even harmonics) |
 | Asymmetric, 24 dB, 1 kHz sine at −6 dBFS, last second of 2 s | mean of the output near 0 | to measure, against the run without the DC blocker | ADR 0009 (DC offset to remove) |
 | Silence, 24 dB, both curves | exactly silence | exact | A saturator adds nothing to nothing |
 | Drive change, sine | equal to the target's output from 20 ms after the change, not before | ± 1 sample, 1e-6 | SPEC (Drive smoothed), same ramp time as Gain out |
-| Non-finite input sample, Asymmetric | later samples finite: the DC blocker keeps no NaN | exact | `.claude/rules/dsp.md` |
+| `InputDrive` alone, a non-finite input sample or ±3e38, Asymmetric | later samples finite: the DC blocker keeps nothing | exact | `.claude/rules/dsp.md`, rt-safety review. The filter downstream is not covered: `FUTURE.md` |
 | Stereo | one channel's signal does not reach the other; the same settings on both | 1e-7 | SPEC (linked stereo) |
 | Chain at Off, 2x, 4x, 24 dB, 5 kHz sine, cutoff 20 kHz | largest alias up to 20 kHz: 2x under Off and 4x under 2x, by at least 6 dB each; 4x under −70 dB against the fundamental | to measure | `.claude/rules/dsp.md` (nonlinearities are oversampled) |
 | Chain, block sizes 1, 7, 64, 480, 512, 2048, with a Drive change and a factor change | identical output | 1e-6 | `.claude/rules/dsp.md` |
@@ -49,9 +53,9 @@ ADR 0009 leaves the DC removal and the smoothing to this task.
 
 * **Curves.** With `g` the drive gain and `u = g x`: Symmetric `tanh(u)`. Asymmetric `(tanh(u + b) − tanh(b)) / (1 − tanh²(b))`, `b = 0.3`: a biased tanh, shifted back to 0 at 0 and divided by its slope at 0, so both curves have the same small signal gain and silence stays silence. Written `t / (1 + t tanh(b))`, `t = tanh(u)` (the tanh addition formula): the same curve, exactly 0 at 0 in floats, one tanh per sample shared by both curves.
 * **Transparent at 0 dB.** tanh alone is not transparent, so `y = x + w (shape(u) − x)`, where `w` rises linearly from 0 at 0 dB to 1 at 6 dB. Dry and saturated are in phase, so the blend has no comb.
-* **DC removal.** Only on the Asymmetric part `shape(u) − x`, so the dry signal is never filtered: a DC blocker `y[n] = x[n] − x[n−1] + R y[n−1]` (J. O. Smith, *Introduction to Digital Filters*, "DC Blocker"), `R = exp(−2π fc / fs)`, `fc = 10 Hz`. One per channel.
+* **DC removal.** On the even part of the Asymmetric curve alone, `shape = odd + even`, `odd = t / D`, `even = −tanh(b) t² / D`, `D = 1 − tanh²(b) t²`: the dry signal and the limiting odd part are never filtered, so `y = x + w (odd + HP(even) − x)` (a blocker on the whole curve overshoots in the bass). The DC blocker is `y[n] = x[n] − x[n−1] + R y[n−1]` (J. O. Smith, *Introduction to Digital Filters*, "DC Blocker"), `R = exp(−2π fc / fs)`, `fc = 10 Hz`. One per channel. It keeps running on Symmetric, so a curve change finds it settled, and an incoming oversampling path takes the outgoing path's DC estimate (code review: a cold blocker let the whole offset through, a low-frequency bump the click measure could not see). A Drive jump in one block still leaves a bump, since the offset appears faster than 10 Hz follows; bound in the tests, for Maxime to judge.
 * **Smoothing.** Gain, `w` and the blend between the two curves ramp linearly over 20 ms, per sample. A curve change is therefore a 20 ms blend, with no reset and no second filter chain.
-* **At rest.** At 0 dB nothing is computed and the DC blocker is cleared; on Symmetric the Asymmetric curve is not computed.
+* **At rest.** At 0 dB nothing is computed and the DC blocker is cleared.
 * **Place in the chain.** One `InputDrive` per oversampling path, between `up` and the filter bank, prepared at the path's rate. Each path ramps on its own; an incoming path starts at the target.
 * **Search done** (`.claude/rules/scope.md` rule 8): `juce::dsp::WaveShaper` is not usable in `dsp/` (no JUCE). sst-waveshapers (GPL, allowed) and math_approx (BSD) are not added: two one-line curves do not justify a new dependency. `std::tanh` is kept until gate 2 measures its cost.
 
