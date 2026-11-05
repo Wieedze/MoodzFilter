@@ -234,8 +234,8 @@ TEST_CASE ("Drive adds nothing to silence", "[dsp][drive]")
 
 TEST_CASE ("A Drive change ramps over 20 ms", "[dsp][drive]")
 {
-    // SPEC: Drive smoothed, same ramp time as Gain out. Symmetric, memoryless: from the change +
-    // 960 samples the output is the one of the target, and one sample before it is not.
+    // SPEC: Drive smoothed, same ramp time as Gain out. Symmetric, memoryless: the ramp lands on its
+    // last sample, change + 959: from there the output is the one of the target, and one sample before it is not.
     constexpr int change = 2048;
     const auto input = sine (1000.0, 0.25f, 8192);
     InputDrive drive;
@@ -251,8 +251,9 @@ TEST_CASE ("A Drive change ramps over 20 ms", "[dsp][drive]")
     auto expected = input;
     run (target, expected);
 
-    for (std::size_t i = change + rampLength; i < output.size(); ++i)
+    for (std::size_t i = change + rampLength - 1; i < output.size(); ++i)
         REQUIRE (std::abs (output[i] - expected[i]) < 1e-6f);
+    CHECK (std::abs (output[change + rampLength - 2] - expected[change + rampLength - 2]) > 1e-5f);
     // Nothing moves before the change
     for (std::size_t i = 0; i < change; ++i)
         REQUIRE (std::abs (output[i] - input[i]) < 1e-7f);
