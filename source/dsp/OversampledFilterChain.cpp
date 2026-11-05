@@ -6,6 +6,9 @@
 
 namespace moodz::dsp
 {
+    static_assert (DryWetMix::maxSegment >= Oversampler::chunkSize, "the chain hands the mix segments of up to a chunk");
+    static_assert (OversampledFilterChain::latencySamples <= WholeSampleDelay::maxDelay, "the dry path is delayed by the latency");
+
     void OversampledFilterChain::prepare (double sampleRate, int maxBlockSize)
     {
         const double rate = std::isfinite (sampleRate) && sampleRate > 0.0 ? sampleRate : 48000.0;
@@ -19,6 +22,7 @@ namespace moodz::dsp
         }
         crossfadeLength = std::max (1, static_cast<int> (std::lround (crossfadeSeconds * rate)));
         lfo.prepare (rate, maxBlockSize);
+        dryWet.prepare (rate, maxBlockSize, latencySamples);
         const double gridSeconds = modulationGridSamples / rate;
         // One-pole low-pass, sampled RC: y += (1 - exp (-T / tau)) (x - y), per step T of the grid
         slewCoefficient = static_cast<float> (1.0 - std::exp (-gridSeconds / lfoSlewSeconds));
@@ -28,6 +32,7 @@ namespace moodz::dsp
 
     void OversampledFilterChain::reset() noexcept MOODZ_NONBLOCKING
     {
+        dryWet.reset();
         lfoDepth = lfoDepthTarget;
         lfoDepthStep = 0.0f;
         lfoDepthStepsLeft = 0;
@@ -72,6 +77,11 @@ namespace moodz::dsp
     void OversampledFilterChain::setDriveCurveIndex (int index) noexcept MOODZ_NONBLOCKING
     {
         driveCurveIndex = index;
+    }
+
+    void OversampledFilterChain::setMix (float amount) noexcept MOODZ_NONBLOCKING
+    {
+        dryWet.setAmount (amount);
     }
 
     void OversampledFilterChain::setLfoShapeIndex (int index) noexcept MOODZ_NONBLOCKING
@@ -239,6 +249,8 @@ namespace moodz::dsp
                 if (crossfading)
                     std::copy (incoming[c].begin(), incoming[c].end(), fading[c].begin());
             }
+            // The input after the guard, for the dry path
+            dryWet.captureDry ({ incoming.data(), numChannels }, length);
             if (crossfading)
                 render (paths[outgoing], { fading.data(), numChannels }, length);
             render (paths[current], { incoming.data(), numChannels }, length);
@@ -257,6 +269,7 @@ namespace moodz::dsp
                 }
                 crossfadePosition += length;
             }
+            dryWet.mix ({ incoming.data(), numChannels }, length);
             lfo.advance (length);
             gridPosition = (gridPosition + length) % modulationGridSamples;
             start += length;

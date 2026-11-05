@@ -212,6 +212,14 @@ namespace moodz::parameters
                 .withStringFromValueFunction ([] (float octaves, int) { return octavesToText (octaves); })
                 .withValueFromStringFunction ([] (const juce::String& text) { return text.trim().getFloatValue(); })));
 
+        // SPEC: Mix 0 to 100 %, default 100 %, smoothed in the dsp layer
+        layout.add (std::make_unique<juce::AudioParameterFloat> (
+            juce::ParameterID { id::mix, version::task0017 },
+            "Mix",
+            juce::NormalisableRange<float> { 0.0f, 100.0f, 0.1f },
+            100.0f,
+            juce::AudioParameterFloatAttributes {}.withLabel ("%")));
+
         return layout;
     }
 
@@ -228,12 +236,13 @@ namespace moodz::parameters
           driveCurve (state.getRawParameterValue (id::driveCurve)),
           lfoShape (state.getRawParameterValue (id::lfoShape)),
           lfoRate (state.getRawParameterValue (id::lfoRate)),
-          lfoDepth (state.getRawParameterValue (id::lfoDepth))
+          lfoDepth (state.getRawParameterValue (id::lfoDepth)),
+          mix (state.getRawParameterValue (id::mix))
     {
         jassert (gainOut != nullptr && filterModel != nullptr && cutoff != nullptr && resonance != nullptr);
         jassert (slope != nullptr && k35Saturation != nullptr && vintageVariant != nullptr && oversampling != nullptr);
         jassert (drive != nullptr && driveCurve != nullptr);
-        jassert (lfoShape != nullptr && lfoRate != nullptr && lfoDepth != nullptr);
+        jassert (lfoShape != nullptr && lfoRate != nullptr && lfoDepth != nullptr && mix != nullptr);
     }
 
     Params Snapshotter::snapshot() const noexcept
@@ -253,6 +262,7 @@ namespace moodz::parameters
             toLfoShapeIndex (lfoShape->load (relaxed)),
             toLfoRateIndex (lfoRate->load (relaxed)),
             lfoDepth->load (relaxed),
+            mix->load (relaxed) / 100.0f,
         };
     }
 }

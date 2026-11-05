@@ -105,6 +105,7 @@ void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     filters.setLfoShapeIndex (params.lfoShape);
     filters.setLfoRateIndex (params.lfoRate);
     filters.setLfoDepthOctaves (params.lfoDepthOctaves);
+    filters.setMix (params.mix);
     filters.select (moodz::dsp::chooseFilter (params.filterModel, params.slopeDb, params.vintageVariant, params.k35Saturation));
     filters.prepare (sampleRate, samplesPerBlock);
 }
@@ -175,6 +176,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     filters.setLfoShapeIndex (params.lfoShape);
     filters.setLfoRateIndex (params.lfoRate);
     filters.setLfoDepthOctaves (params.lfoDepthOctaves);
+    filters.setMix (params.mix);
 
     // While the host plays, the song position sets the LFO; otherwise it runs on, at the last tempo (task 0015)
     if (const auto* host = getPlayHead())
@@ -194,7 +196,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     for (int channel = 0; channel < numChannels; ++channel)
         channels[static_cast<size_t> (channel)] = { buffer.getWritePointer (channel), static_cast<size_t> (numSamples) };
 
-    // SPEC signal chain: drive and filter, then gain out
+    // SPEC signal chain: drive, filter and mix, then gain out
     const std::span<const std::span<float>> active { channels.data(), static_cast<size_t> (numChannels) };
     filters.process (active, numSamples);
     gainOut.process (active, numSamples);

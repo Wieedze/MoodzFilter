@@ -47,6 +47,8 @@ Vocabulary shared between you, the agents and the code (Matt Pocock convention: 
 | **Modulation grid** | The base samples at which the cutoff follows the LFO: every 32, counted across blocks, so the output does not depend on the block size |
 | **Slew** | The 2 ms one-pole on the LFO value, turning a square edge, a sawtooth reset or a loop into a short curve |
 | **Song position** | Where the host is in the song, in quarter notes from the start: `getPpqPosition`. While the host plays, it sets the LFO's phase |
+| **Mix** | The blend of the dry path and the driven and filtered signal, 0 to 100 %: `dsp::DryWetMix` |
+| **Dry path** | The input after the input guard, delayed by the constant latency so it is aligned with the processed signal |
 | **Pre-roll** | The first samples of an Oversampling crossfade, where the incoming path runs unheard so that its empty start does not click |
 | **Whole sample delay** | `dsp::WholeSampleDelay`: a delay of a whole number of samples, completing Off and 2x to the constant latency and delaying the bypass path |
 | **Crossfading filter bank** | `dsp::CrossfadingFilterBank`: every filter variant prepared once, the selected one playing, and the crossfade between two of them; a choice made during a crossfade waits for it to end |
