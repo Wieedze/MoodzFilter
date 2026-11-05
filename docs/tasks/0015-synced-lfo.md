@@ -24,7 +24,7 @@ Unless stated: 48 kHz, blocks of 512. Every bound marked "to measure" comes from
 | Same, cutoff near a bound, depth ±4 octaves | every sample finite, the cutoff held within 20 Hz to 20 kHz | exact | `.claude/rules/dsp.md` |
 | Chain, LFO active, block sizes 1, 7, 64, 480, 512, 2048, every shape | identical output | 1e-6 | `.claude/rules/dsp.md`, ROADMAP |
 | Plugin, a host position moving regularly, block sizes 64, 512, 2048 | identical output | 1e-5 | ROADMAP |
-| Plugin, playback started at beat 8 against at beat 0 | same output once the filter has settled | to measure | Goal: locked to the song position |
+| Plugin, playback started at beat 9 against at beat 0 | same output once the filter has settled | to measure | Goal: locked to the song position |
 | Plugin, host stopped or with no play head | the LFO runs on at the last tempo, output changes | exact | Decision notes |
 | Plugin, tempo moved during playback | the LFO's period follows | to measure | SPEC |
 | Depth change, 200 Hz sine | reaches its target 20 ms after the change, not before | ± 32 samples | SPEC (depth smoothed) |

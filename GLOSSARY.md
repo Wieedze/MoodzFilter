@@ -42,6 +42,10 @@ Vocabulary shared between you, the agents and the code (Matt Pocock convention: 
 | **Input guard** | The check at the top of `OversampledFilterChain::process`: a bad sample counts as 0 (task 0014) |
 | **Bad sample** | An input sample that is not a signal: NaN, an infinity, or beyond the bound. Anything within the bound is a hot signal at most, and is left alone |
 | **The bound** | `OversampledFilterChain::maxInputSample`, ±256: the largest input sample the input guard lets through |
+| **LFO** | `dsp::SyncedLfo`: a phase in time with the host tempo and four shapes, moving the cutoff by up to ±4 octaves |
+| **Cycle length** | One LFO cycle in quarter notes: the LFO rate. A bar is 4 quarter notes in every time signature |
+| **Modulation grid** | The base samples at which the cutoff follows the LFO: every 32, counted across blocks, so the output does not depend on the block size |
+| **Slew** | The 2 ms one-pole on the LFO value, turning a square edge, a sawtooth reset or a loop into a short curve |
 | **Pre-roll** | The first samples of an Oversampling crossfade, where the incoming path runs unheard so that its empty start does not click |
 | **Whole sample delay** | `dsp::WholeSampleDelay`: a delay of a whole number of samples, completing Off and 2x to the constant latency and delaying the bypass path |
 | **Crossfading filter bank** | `dsp::CrossfadingFilterBank`: every filter variant prepared once, the selected one playing, and the crossfade between two of them; a choice made during a crossfade waits for it to end |
