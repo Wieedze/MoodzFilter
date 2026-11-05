@@ -259,6 +259,22 @@ TEST_CASE ("A Drive change ramps over 20 ms", "[dsp][drive]")
         REQUIRE (std::abs (output[i] - input[i]) < 1e-7f);
 }
 
+TEST_CASE ("The dry and saturated blend is half way half way through the ramp", "[dsp][drive]")
+{
+    // Task 0013 verifier: 0 to 24 dB on a constant 0.01. After 480 samples of 960 the gain and the blend
+    // are both half way, by the decision notes of the task:
+    // python3 -c "from math import tanh; g=(1+10**(24/20))/2; print(.01+.5*(tanh(g*.01)-.01))"
+    constexpr int change = 2048;
+    InputDrive drive;
+    prepared (drive, 0.0f, symmetric);
+    std::vector<float> output (change + rampLength, 0.01f);
+    std::span<float> all { output };
+    run (drive, all.first (change));
+    drive.setDriveDb (24.0f);
+    run (drive, all.subspan (change));
+    CHECK (output[change + rampLength / 2 - 1] == Approx (0.04703).margin (1e-4));
+}
+
 TEST_CASE ("A change between two Drive values ramps the gain over 20 ms", "[dsp][drive]")
 {
     // Task 0013 verifier: 6 to 24 dB, where the blend is already all saturated, so only the gain moves.
