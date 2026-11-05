@@ -20,7 +20,7 @@ namespace
     SyncedLfo prepared (int shape, int rate = quarter)
     {
         SyncedLfo lfo;
-        lfo.prepare (48000.0);
+        lfo.prepare (48000.0, 512);
         lfo.setShapeIndex (shape);
         lfo.setRateIndex (rate);
         lfo.reset();
@@ -159,6 +159,15 @@ TEST_CASE ("A bad tempo or position is ignored", "[dsp][lfo]")
         lfo.syncToPosition (bad);
         CHECK (lfo.phase() == Approx (0.25).margin (1e-9));
     }
+}
+
+TEST_CASE ("The phase stays below 1", "[dsp][lfo]")
+{
+    // rt-safety review of task 0015: the header says 0 to 1, and -1e-17 / length rounded to 1
+    auto lfo = prepared (sawtooth);
+    lfo.syncToPosition (-1e-17);
+    CHECK (lfo.phase() >= 0.0);
+    CHECK (lfo.phase() < 1.0);
 }
 
 TEST_CASE ("LFO indices out of range are bounded", "[dsp][lfo]")

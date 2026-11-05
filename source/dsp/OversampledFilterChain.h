@@ -33,12 +33,14 @@ namespace moodz::dsp
         static constexpr int modulationGridSamples = 32;
         // Turns a square edge, a sawtooth reset or a loop into a short curve (task 0015)
         static constexpr double lfoSlewSeconds = 0.002;
+        static constexpr double lfoDepthRampSeconds = 0.02;
 
         void prepare (double sampleRate, int maxBlockSize);
         // Jumps to the selected factor and choice: no crossfade, everything cleared.
         void reset() noexcept MOODZ_NONBLOCKING;
 
-        // Take effect at the start of the next process call; bounded.
+        // Take effect at the start of the next process call, the cutoff on the next step of the
+        // modulation grid while the LFO has a depth; bounded.
         void setFactorIndex (int index) noexcept MOODZ_NONBLOCKING;
         void select (FilterChoice choice) noexcept MOODZ_NONBLOCKING;
         void setCutoffHz (float hz) noexcept MOODZ_NONBLOCKING;
@@ -70,6 +72,7 @@ namespace moodz::dsp
             WholeSampleDelay delay;
         };
 
+        bool lfoIsActive() const noexcept;
         void updateModulation() noexcept MOODZ_NONBLOCKING;
         void applyCutoff() noexcept MOODZ_NONBLOCKING;
         void startPendingCrossfade() noexcept MOODZ_NONBLOCKING;
@@ -94,6 +97,7 @@ namespace moodz::dsp
         int gridPosition = 0; // base samples since the last step of the modulation grid
         float slewCoefficient = 1.0f; // of the one-pole on the LFO value, per grid step
         float slewedValue = 0.0f;
+        bool slewStartsOnNextProcess = true; // the song position is known only then
         float lfoDepthTarget = 0.0f;
         float lfoDepth = 0.0f;
         float lfoDepthStep = 0.0f;

@@ -47,7 +47,7 @@ namespace moodz::dsp
         static constexpr int defaultRateIndex = 12; // 1/4
         static constexpr double defaultTempoBpm = 120.0;
 
-        void prepare (double sampleRate) noexcept;
+        void prepare (double sampleRate, int maxBlockSize) noexcept;
         void reset() noexcept MOODZ_NONBLOCKING;
 
         // Bounded to their lists.

@@ -38,7 +38,7 @@ namespace
             if (!hasPosition)
                 return {};
             PositionInfo info;
-            if (bpm > 0.0)
+            if (hasTempo)
                 info.setBpm (bpm);
             info.setPpqPosition (quarterNotes);
             info.setIsPlaying (playing);
@@ -47,6 +47,7 @@ namespace
 
         bool hasPosition = true;
         bool playing = true;
+        bool hasTempo = true;
         double bpm = 120.0;
         double quarterNotes = 0.0;
     };
@@ -61,20 +62,19 @@ namespace
         juce::MidiBuffer midi;
         std::vector<float> output;
         output.reserve (static_cast<std::size_t> (total));
-        double quarterNotes = startQuarterNotes;
+        if (head != nullptr)
+            head->quarterNotes = startQuarterNotes;
         for (int start = 0; start < total; start += blockSize)
         {
             if (onBlock)
                 onBlock (start);
-            if (head != nullptr)
-                head->quarterNotes = quarterNotes;
             for (int channel = 0; channel < 2; ++channel)
                 for (int i = 0; i < blockSize; ++i)
                     buffer.setSample (channel, i, peak * static_cast<float> (std::sin (2.0 * std::numbers::pi * frequency * (start + i) / sampleRate)));
             processor.processBlock (buffer, midi);
             output.insert (output.end(), buffer.getReadPointer (0), buffer.getReadPointer (0) + blockSize);
             if (head != nullptr && head->playing)
-                quarterNotes += blockSize * head->bpm / (60.0 * sampleRate);
+                head->quarterNotes += blockSize * head->bpm / (60.0 * sampleRate);
         }
         output.resize (static_cast<std::size_t> (total));
         return output;
@@ -254,7 +254,7 @@ TEST_CASE ("The LFO is locked to the song position", "[plugin][lfo]")
 TEST_CASE ("A stopped host or no play head lets the LFO run on", "[plugin][lfo]")
 {
     // Decision notes: free running from where it is, at the last known tempo, 120 BPM at first.
-    // Square on a 1/4: at 120 BPM the output changes level every 12000 samples.
+    // Sine on a 1/4 at 120 BPM: loud at sample 30040, quiet at 42040.
     auto swing = [] (TestPlayHead* head) {
         PluginProcessor processor;
         setUp (processor, sine, quarter, 2.0f);
@@ -269,7 +269,7 @@ TEST_CASE ("A stopped host or no play head lets the LFO run on", "[plugin][lfo]"
     noPosition.hasPosition = false;
     CHECK (swing (&noPosition) > 20.0);
     TestPlayHead noTempo;
-    noTempo.bpm = 0.0;
+    noTempo.hasTempo = false;
     noTempo.playing = false;
     CHECK (swing (&noTempo) > 20.0);
 }
@@ -294,6 +294,15 @@ TEST_CASE ("The LFO follows the host tempo", "[plugin][lfo]")
     const auto after = render (moved, &movedHead, 96000, 512, 2000.0, 0.25f, [&] (int start) { if (start == 48000 - 48000 % 512) movedHead.bpm = 240.0; });
     // 240 BPM from about sample 48000, back at phase 0 there: 12000 samples per cycle
     CHECK (rmsDb (after, 48000 + 3000 + 96 + 40 + 480) - rmsDb (after, 48000 + 9000 + 96 + 40 + 480) > 15.0);
+
+    // Playing: the host's position moves at the tempo, and the LFO with it. 240 BPM from sample 0: a 1/4
+    // lasts 12000 samples, loud at 15040 and quiet at 21040.
+    PluginProcessor playing;
+    setUp (playing, sine, quarter, 2.0f);
+    TestPlayHead playingHead;
+    playingHead.bpm = 240.0;
+    const auto fast = render (playing, &playingHead, 48000, 512, 2000.0, 0.25f);
+    CHECK (rmsDb (fast, 15040) - rmsDb (fast, 21040) > 20.0);
 }
 
 TEST_CASE ("LFO edges and jumps stay curves", "[plugin][lfo][click]")
@@ -314,12 +323,23 @@ TEST_CASE ("LFO edges and jumps stay curves", "[plugin][lfo][click]")
         const auto nothing = [] (PluginProcessor&, TestPlayHead&, int) {};
         const auto squareEdges = measured (square, quarter, nothing);
         const auto sawtoothResets = measured (2, quarter, nothing);
-        const auto loop = measured (sine, quarter, [] (PluginProcessor&, TestPlayHead& head, int start) { if (start == 24 * 512) head.quarterNotes = 0.5; });
+        const auto loop = measured (sine, quarter, [] (PluginProcessor&, TestPlayHead& head, int start) {
+            if (start == 24 * 512)
+            {
+                REQUIRE (head.quarterNotes > 0.5);
+                head.quarterNotes -= 0.25;
+            }
+        });
+        const auto shapeChange = measured (sine, quarter, [] (PluginProcessor& p, TestPlayHead&, int start) {
+            if (start == 24 * 512)
+                choiceParameter (p, "lfoShape") = square;
+        });
         const auto rateChange = measured (sine, fourBars, [] (PluginProcessor& p, TestPlayHead&, int start) { if (start == 24 * 512) choiceParameter (p, "lfoRate") = 12; });
-        SUCCEED ("click peak " << peak << ": square " << squareEdges << ", sawtooth " << sawtoothResets << ", loop " << loop << ", rate " << rateChange);
+        SUCCEED ("click peak " << peak << ": square " << squareEdges << ", sawtooth " << sawtoothResets << ", loop " << loop << ", rate " << rateChange << ", shape " << shapeChange);
+        CHECK (shapeChange < 0.004 * peak);
         CHECK (squareEdges < 0.004 * peak);
         CHECK (sawtoothResets < 0.001 * peak);
-        CHECK (loop < 0.001 * peak);
+        CHECK (loop < 0.002 * peak);
         CHECK (rateChange < 0.001 * peak);
     }
 }
@@ -336,8 +356,18 @@ TEST_CASE ("A bad host transport stays harmless", "[plugin][lfo]")
         setUp (processor, sine, quarter, 2.0f);
         TestPlayHead head;
         head.bpm = bad;
-        const auto output = render (processor, &head, 9600, 512, 2000.0, 0.25f, [&] (int start) { if (start == 2048) head.bpm = 120.0; });
-        CHECK (std::all_of (output.begin(), output.end(), [] (float s) { return std::isfinite (s); }));
+        const auto badTempo = render (processor, &head, 9600, 512, 2000.0, 0.25f, [&] (int start) {
+            if (start == 2048)
+                head.bpm = 120.0;
+        });
+        CHECK (std::all_of (badTempo.begin(), badTempo.end(), [] (float s) { return std::isfinite (s); }));
+        const auto badPosition = render (processor, &head, 9600, 512, 2000.0, 0.25f, [&] (int start) {
+            if (start == 2048)
+                head.quarterNotes = bad;
+            if (start == 4096)
+                head.quarterNotes = 1.0;
+        });
+        CHECK (std::all_of (badPosition.begin(), badPosition.end(), [] (float s) { return std::isfinite (s); }));
     }
 }
 

@@ -6,7 +6,17 @@
 
 namespace moodz::dsp
 {
-    void SyncedLfo::prepare (double newSampleRate) noexcept
+    namespace
+    {
+        // The fractional part, in [0, 1): for a tiny negative value, x - floor (x) rounds to 1
+        double wrapped (double x) noexcept
+        {
+            const double fraction = x - std::floor (x);
+            return fraction < 1.0 ? fraction : 0.0;
+        }
+    }
+
+    void SyncedLfo::prepare (double newSampleRate, int /* maxBlockSize */) noexcept
     {
         sampleRate = std::isfinite (newSampleRate) && newSampleRate > 0.0 ? newSampleRate : 48000.0;
         reset();
@@ -35,18 +45,19 @@ namespace moodz::dsp
 
     void SyncedLfo::syncToPosition (double quarterNotes) noexcept MOODZ_NONBLOCKING
     {
-        if (!std::isfinite (quarterNotes))
-            return;
+        // Finite after the division too: on a short rate an extreme position overflows
         const double cycles = quarterNotes / rates[static_cast<std::size_t> (rate)].quarterNotes;
-        currentPhase = cycles - std::floor (cycles);
+        if (std::isfinite (cycles))
+            currentPhase = wrapped (cycles);
     }
 
     void SyncedLfo::advance (int samples) noexcept MOODZ_NONBLOCKING
     {
-        // Quarter notes per sample = BPM / (60 x rate)
+        // Cycles per sample = BPM / (60 x sample rate x quarter notes per cycle)
         const double step = tempoBpm / (60.0 * sampleRate * rates[static_cast<std::size_t> (rate)].quarterNotes);
         const double next = currentPhase + static_cast<double> (samples) * step;
-        currentPhase = next - std::floor (next);
+        if (std::isfinite (next))
+            currentPhase = wrapped (next);
     }
 
     double SyncedLfo::phase() const noexcept
@@ -58,9 +69,9 @@ namespace moodz::dsp
     {
         // Definitions in docs/tasks/0015-synced-lfo.md. A hair of phase ahead: an edge that falls exactly
         // on a step of the modulation grid must not land on either side by the rounding of the phase,
-        // which depends on the block size
-        const double ahead = currentPhase + 1e-9;
-        const double p = ahead - std::floor (ahead);
+        // which depends on the block size. A host position rounded more coarsely can still move an
+        // edge by one step of the grid, under 1 ms at 48 kHz.
+        const double p = wrapped (currentPhase + 1e-9);
         switch (shape)
         {
             case 1:

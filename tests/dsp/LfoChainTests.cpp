@@ -9,6 +9,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <numbers>
 #include <vector>
@@ -210,6 +211,72 @@ TEST_CASE ("The LFO stays finite with the cutoff at a bound", "[dsp][lfo]")
                     run (*chain, output);
                     CHECK (allFinite (output));
                 }
+}
+
+TEST_CASE ("The filter holds its 20 Hz to 20 kHz range under the LFO", "[dsp][lfo]")
+{
+    // Task 0015: past a bound the cutoff stays at the bound, so the output equals the filter at the
+    // bound without an LFO. Square on 4 bars, in its first half (+1) or second half (-1).
+    const auto input = noise (8192, 127u);
+    auto rendered = [&] (float cutoff, float depth, double position) {
+        auto chain = preparedChain ({ .cutoff = cutoff, .shape = square, .rate = 0, .depth = depth });
+        chain->syncLfoToPosition (position);
+        auto output = input;
+        run (*chain, output);
+        CHECK (allFinite (output));
+        return output;
+    };
+    CHECK (largestDifference (rendered (20000.0f, 4.0f, 0.0), rendered (20000.0f, 0.0f, 0.0), 0, input.size()) < 1e-6f);
+    CHECK (largestDifference (rendered (20.0f, 4.0f, 8.0), rendered (20.0f, 0.0f, 0.0), 0, input.size()) < 1e-6f);
+    // Within the range the LFO does move it: 500 Hz x 16 is 8 kHz, not the bound
+    CHECK (largestDifference (rendered (500.0f, 4.0f, 0.0), rendered (20000.0f, 0.0f, 0.0), 0, input.size()) > 1e-3f);
+}
+
+TEST_CASE ("The LFO starts on the value of the song position", "[dsp][lfo]")
+{
+    // Code review of task 0015: after a prepare, playback from the middle of a cycle must not sweep from
+    // the value of phase 0. Square on a 1/2, position 1 quarter note: -1 from the first sample, so the
+    // cutoff is at 1 kHz / 16 at once, not coming down from 16 kHz.
+    auto chain = preparedChain ({ .shape = square, .rate = 9, .depth = 4.0f });
+    chain->syncLfoToPosition (1.0);
+    std::array<float, 1> sample { 0.0f };
+    const std::array<std::span<float>, 1> channels { std::span<float> { sample } };
+    chain->process (channels, 1);
+    CHECK (chain->modulatedCutoffHz() == Approx (62.5f).epsilon (1e-3));
+}
+
+TEST_CASE ("An extreme song position does not stop the LFO", "[dsp][lfo]")
+{
+    // rt-safety review of task 0015: on a rate under a quarter note, position / length overflows to
+    // infinity from a finite position, which gave a NaN phase that stayed in the slew for good.
+    constexpr int shortest = 21;
+    for (double position : { std::numeric_limits<double>::max(), std::numeric_limits<double>::lowest() })
+    {
+        INFO ("position " << position);
+        // Sine: a square would read a NaN phase as its second half and hide it
+        auto chain = preparedChain ({ .shape = sine, .rate = shortest, .depth = 1.0f });
+        std::vector<float> silence (1024, 0.0f);
+        run (*chain, silence);
+        chain->syncLfoToPosition (position);
+        run (*chain, silence);
+        CHECK (std::isfinite (chain->modulatedCutoffHz()));
+        chain->syncLfoToPosition (0.03125); // a quarter of a cycle: +1, and the next ticks reach it
+        run (*chain, silence);
+        CHECK (chain->modulatedCutoffHz() >= 500.0f);
+        CHECK (chain->modulatedCutoffHz() <= 2000.0f);
+    }
+}
+
+TEST_CASE ("At depth 0 a cutoff change applies at the next block", "[dsp][lfo]")
+{
+    // Code review of task 0015: at depth 0 the grid does not delay the cutoff, whatever the block
+    auto chain = preparedChain ({});
+    std::array<float, 7> samples {};
+    const std::array<std::span<float>, 1> channels { std::span<float> { samples } };
+    chain->process (channels, 7);
+    chain->setCutoffHz (3000.0f);
+    chain->process (channels, 7);
+    CHECK (chain->modulatedCutoffHz() == Approx (3000.0f).margin (1e-3));
 }
 
 TEST_CASE ("The chain with the LFO does not depend on the block size", "[dsp][lfo]")
