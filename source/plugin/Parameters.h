@@ -1,6 +1,7 @@
 #pragma once
 
 #include "dsp/FilterModels.h"
+#include "dsp/InputDrive.h"
 #include "dsp/Oversampler.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -20,6 +21,8 @@ namespace moodz::parameters
         inline constexpr const char* k35Saturation = "k35Saturation";
         inline constexpr const char* vintageVariant = "vintageVariant";
         inline constexpr const char* oversampling = "oversampling";
+        inline constexpr const char* drive = "drive";
+        inline constexpr const char* driveCurve = "driveCurve";
     }
 
     // Parameter versions passed to juce::ParameterID, one per wave of additions; the next wave
@@ -30,6 +33,7 @@ namespace moodz::parameters
         inline constexpr int task0008 = 2; // filterModel, cutoff, resonance
         inline constexpr int task0010 = 3; // slope, k35Saturation, vintageVariant
         inline constexpr int task0012 = 4; // oversampling
+        inline constexpr int task0013 = 5; // drive, driveCurve
     }
 
     juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
@@ -54,6 +58,8 @@ namespace moodz::parameters
     int toVintageVariantIndex (float rawValue) noexcept;
     // Same for the Oversampling list
     int toOversamplingIndex (float rawValue) noexcept;
+    // Same for the Drive curve list
+    int toDriveCurveIndex (float rawValue) noexcept;
 
     // Plain copy of the parameter values, taken at the start of each block.
     // The dsp layer reads only this, never the APVTS.
@@ -67,6 +73,8 @@ namespace moodz::parameters
         float k35Saturation = dsp::defaultK35Saturation; // 0..1, from the 0..100 % parameter
         int vintageVariant = dsp::defaultVintageVariant;
         int oversampling = dsp::Oversampler::defaultFactorIndex;
+        float driveDb = dsp::InputDrive::minDb;
+        int driveCurve = dsp::InputDrive::defaultCurveIndex;
     };
 
     // Raw atomic values, looked up once so that a snapshot needs no string lookup.
@@ -85,5 +93,7 @@ namespace moodz::parameters
         const std::atomic<float>* k35Saturation;
         const std::atomic<float>* vintageVariant;
         const std::atomic<float>* oversampling;
+        const std::atomic<float>* drive;
+        const std::atomic<float>* driveCurve;
     };
 }

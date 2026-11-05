@@ -100,6 +100,8 @@ void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     filters.setCutoffHz (params.cutoffHz);
     filters.setResonance (params.resonance);
     filters.setFactorIndex (params.oversampling);
+    filters.setDriveDb (params.driveDb);
+    filters.setDriveCurveIndex (params.driveCurve);
     filters.select (moodz::dsp::chooseFilter (params.filterModel, params.slopeDb, params.vintageVariant, params.k35Saturation));
     filters.prepare (sampleRate, samplesPerBlock);
 }
@@ -165,6 +167,8 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     filters.setFactorIndex (params.oversampling);
     filters.setCutoffHz (params.cutoffHz);
     filters.setResonance (params.resonance);
+    filters.setDriveDb (params.driveDb);
+    filters.setDriveCurveIndex (params.driveCurve);
 
     // Mono or stereo only (isBusesLayoutSupported), so two spans are enough
     const auto numSamples = buffer.getNumSamples();
@@ -173,7 +177,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     for (int channel = 0; channel < numChannels; ++channel)
         channels[static_cast<size_t> (channel)] = { buffer.getWritePointer (channel), static_cast<size_t> (numSamples) };
 
-    // SPEC signal chain: filter, then gain out
+    // SPEC signal chain: drive and filter, then gain out
     const std::span<const std::span<float>> active { channels.data(), static_cast<size_t> (numChannels) };
     filters.process (active, numSamples);
     gainOut.process (active, numSamples);

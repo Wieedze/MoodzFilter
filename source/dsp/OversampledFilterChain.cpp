@@ -13,6 +13,7 @@ namespace moodz::dsp
         {
             auto& path = paths[i];
             path.oversampler.prepare (static_cast<int> (i));
+            path.drive.prepare (rate * path.oversampler.factor(), maxBlockSize * path.oversampler.factor());
             path.filters.prepare (rate * path.oversampler.factor(), maxBlockSize * path.oversampler.factor());
             path.delay.prepare (latencySamples - path.oversampler.latencySamples());
         }
@@ -49,9 +50,23 @@ namespace moodz::dsp
             resonance = amount;
     }
 
+    void OversampledFilterChain::setDriveDb (float db) noexcept MOODZ_NONBLOCKING
+    {
+        if (std::isfinite (db))
+            driveDb = db;
+    }
+
+    void OversampledFilterChain::setDriveCurveIndex (int index) noexcept MOODZ_NONBLOCKING
+    {
+        driveCurveIndex = index;
+    }
+
     void OversampledFilterChain::startPath (std::size_t index) noexcept MOODZ_NONBLOCKING
     {
         auto& path = paths[index];
+        path.drive.setDriveDb (driveDb);
+        path.drive.setCurveIndex (driveCurveIndex);
+        path.drive.reset();
         path.filters.setCutoffHz (cutoffHz);
         path.filters.setResonance (resonance);
         path.filters.select (choice);
@@ -68,6 +83,7 @@ namespace moodz::dsp
             outgoing = current;
             current = pending;
             startPath (current);
+            paths[current].drive.takeDcEstimateFrom (paths[outgoing].drive);
             crossfadePosition = 0;
         }
         paths[current].filters.select (choice);
@@ -75,6 +91,8 @@ namespace moodz::dsp
         {
             paths[index].filters.setCutoffHz (cutoffHz);
             paths[index].filters.setResonance (resonance);
+            paths[index].drive.setDriveDb (driveDb);
+            paths[index].drive.setCurveIndex (driveCurveIndex);
         }
     }
 
@@ -83,6 +101,7 @@ namespace moodz::dsp
         std::array<std::span<float>, 2> high {};
         for (std::size_t c = 0; c < channels.size(); ++c)
             high[c] = path.oversampler.up (static_cast<int> (c), channels[c].first (static_cast<std::size_t> (numSamples)));
+        path.drive.process ({ high.data(), channels.size() }, numSamples * path.oversampler.factor());
         path.filters.process ({ high.data(), channels.size() }, numSamples * path.oversampler.factor());
         for (std::size_t c = 0; c < channels.size(); ++c)
             path.oversampler.down (static_cast<int> (c), channels[c].first (static_cast<std::size_t> (numSamples)));

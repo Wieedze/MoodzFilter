@@ -7,6 +7,7 @@
 #include <cmath>
 #include <functional>
 #include <numbers>
+#include <vector>
 
 namespace
 {
@@ -168,4 +169,148 @@ TEST_CASE ("A Diode slope wobbling across a step does not click", "[plugin][cros
         94 * blockSize);
     SUCCEED ("click Diode slope wobble " << measure);
     CHECK (measure < maximumClick);
+}
+
+TEST_CASE ("Drive and Drive curve changes do not click", "[plugin][crossfade][drive]")
+{
+    // SPEC success criterion 3, post-mortem 0012: filter wide open, -12 and 0 dBFS. Each change is
+    // measured against the setting it ends on, held steady, since a saturated sine has a sharper
+    // curve than a clean one. Click measures printed by:
+    // ./Builds/PluginTests "Drive and Drive curve changes do not click" -s | grep "click"
+    auto steady = [] (float drive, float curve) {
+        return [=] (PluginProcessor& p, int block) {
+            if (block == -1)
+            {
+                set (p, "cutoff", 20000.0f);
+                set (p, "drive", drive);
+                set (p, "driveCurve", curve);
+            }
+        };
+    };
+    auto wide = [] (float curve) { return [=] (PluginProcessor& p) { set (p, "cutoff", 20000.0f); set (p, "driveCurve", curve); }; };
+    auto wideAtFullDrive = [] (PluginProcessor& p) { set (p, "cutoff", 20000.0f); set (p, "drive", 24.0f); };
+    for (float peak : { 0.25f, 1.0f })
+    {
+        for (float curve : { 0.0f, 1.0f })
+        {
+            const auto reference = clickMeasure (steady (24.0f, curve), changeBlock + 6, 2400, peak);
+            const auto rising = clickMeasure (change ("drive", 0.0f, 24.0f, wide (curve)), changeBlock + 6, 2400, peak);
+            SUCCEED ("click peak " << peak << ", curve " << curve << ", Drive 0 to 24 dB: " << rising << ", steady " << reference);
+            CHECK (rising < 1.2 * reference);
+        }
+        const auto toAsymmetric = clickMeasure (change ("driveCurve", 0.0f, 1.0f, wideAtFullDrive), changeBlock + 6, 2400, peak);
+        const auto asymmetricSteady = clickMeasure (steady (24.0f, 1.0f), changeBlock + 6, 2400, peak);
+        const auto symmetricSteady = clickMeasure (steady (24.0f, 0.0f), changeBlock + 6, 2400, peak);
+        SUCCEED ("click peak " << peak << ", curve change: " << toAsymmetric << ", steady " << symmetricSteady << " and " << asymmetricSteady);
+        CHECK (toAsymmetric < 1.2 * std::max (asymmetricSteady, symmetricSteady));
+    }
+}
+
+TEST_CASE ("An Oversampling change at full Drive does not click", "[plugin][crossfade][drive]")
+{
+    // Post-mortem 0012: filter wide open, Drive 24 dB, both curves. Click measures printed by:
+    // ./Builds/PluginTests "An Oversampling change at full Drive does not click" -s | grep "click"
+    for (float peak : { 0.25f, 1.0f })
+        for (float curve : { 0.0f, 1.0f })
+        {
+            auto driven = [=] (PluginProcessor& p) { set (p, "cutoff", 20000.0f); set (p, "drive", 24.0f); set (p, "driveCurve", curve); };
+            for (auto [from, to] : { std::array<float, 2> { 0.0f, 1.0f }, { 1.0f, 2.0f }, { 2.0f, 0.0f } })
+            {
+                auto held = [=] (float setting) {
+                    return [=] (PluginProcessor& p, int block) { if (block == -1) { driven (p); set (p, "oversampling", setting); } };
+                };
+                const auto measure = clickMeasure (change ("oversampling", from, to, driven), changeBlock + 6, 2400, peak);
+                const auto reference = std::max (clickMeasure (held (from), changeBlock + 6, 2400, peak), clickMeasure (held (to), changeBlock + 6, 2400, peak));
+                SUCCEED ("click peak " << peak << ", curve " << curve << ", setting " << from << " to " << to << ": " << measure << ", steady " << reference);
+                CHECK (measure < 1.2 * reference);
+            }
+        }
+}
+
+namespace
+{
+    // A low-frequency bump, which the click measure cannot see: the largest |mean| over any 5 ms (one
+    // period of the 200 Hz sine, so the sine itself averages to 0), left output, over the 100 ms after
+    // the change. Same signal and settings as clickMeasure.
+    double bumpMeasure (const std::function<void (PluginProcessor&, int)>& onBlock, float peak)
+    {
+        PluginProcessor processor;
+        set (processor, "cutoff", 20000.0f);
+        set (processor, "resonance", 20.0f);
+        onBlock (processor, -1);
+        processor.prepareToPlay (48000.0, blockSize);
+
+        constexpr int period = 240;
+        const int from = changeBlock * blockSize, to = from + 4800;
+        std::vector<float> output;
+        juce::AudioBuffer<float> buffer (2, blockSize);
+        juce::MidiBuffer midi;
+        for (int block = 0; block * blockSize < to + period; ++block)
+        {
+            onBlock (processor, block);
+            for (int channel = 0; channel < 2; ++channel)
+                for (int i = 0; i < blockSize; ++i)
+                    buffer.setSample (channel, i, peak * static_cast<float> (std::sin (2.0 * std::numbers::pi * 200.0 * (block * blockSize + i) / 48000.0)));
+            processor.processBlock (buffer, midi);
+            for (int i = 0; i < blockSize; ++i)
+                output.push_back (buffer.getSample (0, i));
+        }
+        double largest = 0.0;
+        for (int start = from; start < to; ++start)
+        {
+            double sum = 0.0;
+            for (int i = 0; i < period; ++i)
+                sum += static_cast<double> (output[static_cast<size_t> (start + i)]);
+            largest = std::max (largest, std::abs (sum / period));
+        }
+        return largest;
+    }
+
+}
+
+TEST_CASE ("A Drive curve change at full Drive leaves no low-frequency bump", "[plugin][crossfade][drive]")
+{
+    // Code review of task 0013: 0.07 to 0.09 when the DC blocker stopped on Symmetric (the commit
+    // before it). What is left is the waveform changing during the blend, no offset. Printed by:
+    // ./Builds/PluginTests "A Drive curve change at full Drive leaves no low-frequency bump" -s | grep "bump"
+    auto driven = [] (PluginProcessor& p) { set (p, "drive", 24.0f); };
+    for (float peak : { 0.25f, 1.0f })
+        for (auto [from, to] : { std::array<float, 2> { 0.0f, 1.0f }, { 1.0f, 0.0f } })
+        {
+            const auto measure = bumpMeasure (change ("driveCurve", from, to, driven), peak);
+            SUCCEED ("bump peak " << peak << ", curve " << from << " to " << to << ": " << measure);
+            CHECK (measure < 0.01);
+        }
+}
+
+TEST_CASE ("An Oversampling change at full Drive leaves no low-frequency bump", "[plugin][crossfade][drive]")
+{
+    // Code review of task 0013: the incoming path takes over the DC estimate of the outgoing one.
+    // Without takeDcEstimateFrom in OversampledFilterChain.cpp: 0.07 to 0.09. Printed by:
+    // ./Builds/PluginTests "An Oversampling change at full Drive leaves no low-frequency bump" -s | grep "bump"
+    auto driven = [] (PluginProcessor& p) { set (p, "drive", 24.0f); set (p, "driveCurve", 1.0f); };
+    for (float peak : { 0.25f, 1.0f })
+        for (auto [from, to] : { std::array<float, 2> { 0.0f, 1.0f }, { 1.0f, 2.0f }, { 2.0f, 0.0f } })
+        {
+            const auto measure = bumpMeasure (change ("oversampling", from, to, driven), peak);
+            SUCCEED ("bump peak " << peak << ", setting " << from << " to " << to << ": " << measure);
+            CHECK (measure < 0.005);
+        }
+}
+
+TEST_CASE ("A sudden Drive jump leaves a bounded low-frequency bump", "[plugin][crossfade][drive]")
+{
+    // The asymmetric offset appears in 20 ms, faster than the 10 Hz DC blocker follows: a jump in one
+    // block is the worst case, and slower automation gives less. Symmetric has no offset: there the
+    // measure only sees the sine's amplitude rising across the 5 ms window. Printed by:
+    // ./Builds/PluginTests "A sudden Drive jump leaves a bounded low-frequency bump" -s | grep "bump"
+    auto asymmetric = [] (PluginProcessor& p) { set (p, "driveCurve", 1.0f); };
+    for (float peak : { 0.25f, 1.0f })
+    {
+        const auto measure = bumpMeasure (change ("drive", 0.0f, 24.0f, asymmetric), peak);
+        const auto symmetricJump = bumpMeasure (change ("drive", 0.0f, 24.0f), peak);
+        SUCCEED ("bump peak " << peak << ", Drive 0 to 24 dB: asymmetric " << measure << ", symmetric " << symmetricJump);
+        CHECK (measure < 0.2);
+        CHECK (symmetricJump < 0.06);
+    }
 }
