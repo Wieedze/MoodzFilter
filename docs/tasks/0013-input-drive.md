@@ -29,6 +29,7 @@ Unless stated: 48 kHz, blocks of 512. Every bound marked "to measure" comes from
 | Asymmetric, 24 dB, 1 kHz sine at −6 dBFS, last second of 2 s | mean of the output near 0 | to measure, against the run without the DC blocker | ADR 0009 (DC offset to remove) |
 | Silence, 24 dB, both curves | silence | 1e-9 | A saturator adds nothing to nothing |
 | Drive change 0 to 24 dB (sine), 6 to 24 dB (constant 0.01), curve change at 24 dB (sine) | equal to the target's output from 20 ms after the change, not before | ± 1 sample, 1e-6 | SPEC (Drive smoothed), same ramp time as Gain out |
+| Drive 0 to 24 dB, constant 0.01, 480 samples into the ramp | 0.04703: gain and blend both half way | 1e-4 | Decision notes; the value comes from the Python command in the test |
 | Drive and curve moved during playback in the plugin, 1 kHz sine | the output changes, and ends equal to a render set from the start | 1e-3 | Task 0013 verifier: the click bounds alone pass if a change never arrives |
 | Chain, 100 Hz sine at −6 dBFS, 24 dB, Cytomic SVF Low-pass at 300 Hz | 9th harmonic under −40 dB against the fundamental: the filter comes after the drive | to measure | SPEC signal chain |
 | `InputDrive` alone, a non-finite input sample or ±3e38, Asymmetric | later samples finite: the DC blocker keeps nothing | exact | `.claude/rules/dsp.md`, rt-safety review. The filter downstream is not covered: `FUTURE.md` |
@@ -71,13 +72,15 @@ ADR 0009 leaves the DC removal and the smoothing to this task.
 
 ## Definition of done
 
-* [ ] Tests written before the code, red then green.
-* [ ] Debug, Release, RTSan: `ctest` green.
-* [ ] `check` and `compare` green, no golden change.
-* [ ] pluginval 10 green.
-* [ ] `rt-safety-reviewer` passed.
-* [ ] `GLOSSARY.md` updated (Input drive, Drive curve, DC blocker).
-* [ ] **Maxime: the CI installer loads in Live; at 0 dB nothing changes; Drive saturates progressively with no hole in its travel; the two curves sound different and both are usable; automating Drive and Drive curve during playback does not click.**
-* [ ] `code-review`, `task-verifier`: pass. Post-mortem written, `STATE.md` updated.
+* [x] Tests written before the code, red then green.
+* [x] Debug, Release, RTSan: `ctest` green.
+* [x] `check` and `compare` green, no golden change.
+* [x] pluginval 10 green.
+* [x] `rt-safety-reviewer` passed.
+* [x] `GLOSSARY.md` updated (Input drive, Drive curve, DC blocker).
+* [x] **Maxime: the CI installer loads in Live; at 0 dB nothing changes; Drive saturates progressively with no hole in its travel; the two curves sound different and both are usable; automating Drive and Drive curve during playback does not click.**
+* [x] `code-review`, `task-verifier`: pass. Post-mortem written, `STATE.md` updated.
 
 ## End note (filled by the task-verifier)
+
+2026-11-05, task-verifier: pass on ccfb835, after 3 rounds that failed on test coverage and evidence, none on behaviour; rounds 2 and 3 only changed tests and docs, `git diff --stat b2901d9 ccfb835 -- source` is empty. Local Debug: `ctest` 127/127, `MoodzFilterTools check` all passed, `render` + `compare` against `tests/golden` within tolerance, no golden change on the branch. CI run 42010306741 on b21a164, same source: Linux and Windows with pluginval 10, RealtimeSanitizer, all green; the closing commit's run is linked in PR #16. Figures: second harmonic -238 dB Symmetric, -19.7 dB Asymmetric (`./Builds/DspTests "The asymmetric curve adds even harmonics\, the symmetric one does not" -s | grep second`); mean -6.9e-7 at 24 dB, -0.29 with `blocked = even` (`./Builds/DspTests "The asymmetric curve leaves no DC offset" -s | grep mean`); largest alias up to 20 kHz: Off -20.2, 2x -38.7, 4x -71.8 dB Symmetric (`./Builds/DspTests "Oversampling lowers the aliases of the drive" -s | grep alias`); Asymmetric span 2.20 at 20 Hz, 2.19 at 1 kHz (`./Builds/DspTests "The asymmetric curve limits as much in the bass" -s | grep span`); bump at most 0.0065 on a curve change, 0.0024 on an Oversampling change, 0.16 on a Drive jump in one block (`./Builds/PluginTests "[drive]" -s | grep bump`). The verifier's mutations all go red, except two accepted because no row asks for them: `fc` = 100 Hz and no clear at rest. rt-safety review of 5bc766b and b2901d9: no real-time problem. Code review on 5bc766b; b2901d9, which came out of it, had the rt-safety review and the verifier, not a second code review. Maxime's Live test on the installer of b2901d9: all fine on the five points, sudden Drive jump included, 2026-11-05 about 10:25 CET. Not covered by that listening: the Asymmetric tail when a signal stops abruptly, raised afterwards. Could not be proved from git: red before green for 7b173fb and 5bc766b, where tests and code share a commit; for the later tests, added after the code, the mutations are the evidence. Left in `FUTURE.md`: the non-finite filter state, one ramp type, benchmarking the chain, the offset tail, the combined Drive jump and factor change. Post-mortem: playbook `docs/plugins/moodzfilter/learning/0013-input-drive.md`.
