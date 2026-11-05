@@ -17,15 +17,15 @@ Unless stated: 48 kHz, blocks of 512. Every bound marked "to measure" comes from
 | Mix 100 %, against the chain before the task | same output | 1e-7 | Goal |
 | `check`, `render`, `compare` at the default | every reference unchanged, no `golden:` commit | manifest tolerances | ADR 0003 |
 | Mix 0 %, any Model, Drive, Oversampling, LFO | output equal to the input delayed by the constant latency, 40 samples, the same as bypass | 1e-6 | SPEC, ADR 0009 |
-| Mix 50 %, an impulse, Oversampling Off, 2x, 4x, filter wide open | a single peak at the latency, ± 1 sample of the wet peak: no second peak | to measure | SPEC: no comb filtering |
-| Mix 50 %, sines at 1, 5, 10 and 15 kHz, filter wide open, resonance 0, each factor | within a bound of the level at Mix 100 %: no dip of a comb | to measure | SPEC |
+| Mix 50 %, an impulse, Oversampling Off, 2x, 4x, filter wide open | a single peak at the latency, ± 1 sample of the wet peak: nothing beyond 2 samples above 40 % of it (run: at most 3 %) | to measure | SPEC: no comb filtering |
+| Mix 50 %, sines at 1, 5, 10 and 15 kHz, filter wide open, resonance 0, each factor | within 2 dB of the blend of a dry at 0 dB and that wet's level (run: at most 1.78 dB at 15 kHz at 4x, the filter's own phase near its cutoff) | to measure | SPEC |
 | Mix at 25 % and 75 %, a 10 kHz sine, Cytomic SVF Low-pass at 20 Hz, so the wet part is gone | output level 75 % and 25 % of the input: the dry weight | 0.1 dB | Linear blend, decision notes |
 | Mix change | reaches its target 20 ms after the change, not before | ± 1 sample | SPEC (Mix smoothed), same ramp as Gain out |
 | Same at 44.1 kHz | the same time | ± 1 sample | Post-mortem 0015 |
 | Chain, block sizes 1, 7, 64, 480, 512, 2048, a Mix change | identical output | 1e-6 | `.claude/rules/dsp.md` |
 | Bad input samples at Mix 0 % and 50 % | every output finite: the dry path is guarded too | exact | Task 0014 |
 | Stereo, different signals | each channel equals the same signal mixed alone | 1e-6 | SPEC |
-| Mix 0 to 100 % and back at Drive 24 dB Asymmetric, filter wide open, −12 and 0 dBFS | click measure at most 20 % above the higher setting held steady, and red with a one-sample ramp; bump measure bound to measure | to measure | SPEC success criterion 3 |
+| Mix 0 to 100 % and back at Drive 24 dB Asymmetric, filter wide open, −12 and 0 dBFS | click measure at most 20 % above the higher setting held steady, and red with a one-sample ramp; bump measure under 0.06 (run: 0.05, the amplitude changing) | to measure | SPEC success criterion 3 |
 | Mix moved during playback in the plugin | the output changes and ends equal to a render set from the start | 1e-3 | Post-mortem 0013 |
 | Every parameter moving on every block, 2 s of noise, a bad sample per block, RTSan | every sample finite; no report | exact | `.claude/rules/realtime-audio.md` |
 | Parameters | Mix 0 to 100 %, default 100 %, a non-finite value ignored; version 7; frozen list | exact | SPEC, `.claude/rules/juce.md` |

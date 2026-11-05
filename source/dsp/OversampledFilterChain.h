@@ -1,6 +1,7 @@
 #pragma once
 
 #include "dsp/CrossfadingFilterBank.h"
+#include "dsp/DryWetMix.h"
 #include "dsp/FilterModels.h"
 #include "dsp/InputDrive.h"
 #include "dsp/Oversampler.h"
@@ -47,6 +48,8 @@ namespace moodz::dsp
         void setResonance (float amount) noexcept MOODZ_NONBLOCKING;
         void setDriveDb (float db) noexcept MOODZ_NONBLOCKING;
         void setDriveCurveIndex (int index) noexcept MOODZ_NONBLOCKING;
+        // 0 is all dry, 1 all wet (task 0017).
+        void setMix (float amount) noexcept MOODZ_NONBLOCKING;
         void setLfoShapeIndex (int index) noexcept MOODZ_NONBLOCKING;
         void setLfoRateIndex (int index) noexcept MOODZ_NONBLOCKING;
         // Clamped to +/-maxLfoDepthOctaves; a non-finite value is ignored.
@@ -80,6 +83,7 @@ namespace moodz::dsp
         void render (Path& path, std::span<std::span<float>> channels, int numSamples) noexcept MOODZ_NONBLOCKING;
 
         std::array<Path, Oversampler::factorCount> paths;
+        DryWetMix dryWet;
         // The outgoing path renders into this scratch, in chunks of its size
         std::array<std::array<float, Oversampler::chunkSize>, 2> scratch {};
         FilterChoice choice {};
