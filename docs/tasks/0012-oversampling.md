@@ -56,14 +56,16 @@ Unless stated: 48 kHz, stereo, blocks of 512. The **click measure** is the one o
 
 ## Definition of done
 
-* [ ] Tests written before the code, red then green.
-* [ ] Debug, Release, RTSan: `ctest` green.
-* [ ] `check` green; `compare` green after a `golden: ` commit approved by Maxime.
-* [ ] pluginval 10 green.
-* [ ] `rt-safety-reviewer` passed.
-* [ ] `GLOSSARY.md` updated (Oversampling factor, Oversampled filter chain, Constant latency, Pre-roll, Whole sample delay).
-* [ ] `THIRD_PARTY_NOTICES.txt` updated (Signalsmith DSP).
-* [ ] **Maxime: the CI installer loads in Live; the three settings sound right, at the same level; automating Oversampling during playback does not click; the track stays aligned (no shift against another track when changing the setting); bypass does not shift the track.**
-* [ ] `task-verifier`: pass. Post-mortem written, `STATE.md` updated.
+* [x] Tests written before the code, red then green.
+* [x] Debug, Release, RTSan: `ctest` green.
+* [x] `check` green; `compare` green after a `golden: ` commit approved by Maxime.
+* [x] pluginval 10 green.
+* [x] `rt-safety-reviewer` passed.
+* [x] `GLOSSARY.md` updated (Oversampling factor, Oversampled filter chain, Constant latency, Pre-roll, Whole sample delay).
+* [x] `THIRD_PARTY_NOTICES.txt` updated (Signalsmith DSP).
+* [x] **Maxime: the CI installer loads in Live; the three settings sound right, at the same level; automating Oversampling during playback does not click; the track stays aligned (no shift against another track when changing the setting); bypass does not shift the track.**
+* [x] `task-verifier`: pass. Post-mortem written, `STATE.md` updated.
 
 ## End note (filled by the task-verifier)
+
+2026-11-05, task-verifier: pass (1 round), on c3e7d78, no failed item; its two open inputs then came back clean (rt-safety review, Maxime's retest). Local Debug: `ctest` 97/97 green, `MoodzFilterTools check` all passed, `render` + `compare` against `tests/golden` within tolerance, max error 0 after the `golden:` commit f6ac96b. CI run 41797476525 on c3e7d78: Linux and Windows Release 97/97, pluginval 10 green on both, RealtimeSanitizer 98/98 with no report. Latency 40 samples at every setting and rate (`./Builds/PluginTests "The reported latency is the same at every setting and rate"`). Click measures (`./Builds/PluginTests "An Oversampling change does not click" -s | grep click`, and the same command for the wide-open test): 0.000171 at cutoff 5 kHz (bound 0.00025); at cutoff 20 kHz, 0.000171 at -12 dBFS and 0.000686 at most at 0 dBFS, the sine alone. Largest response difference between settings 0.349 dB, 4 kHz at 4x, and fold-back -84.33 dB at 2x (`./Builds/DspTests "[oversampling]" -s`). Maxime's Live test: all fine on a2a5da6, 2026-11-04 08:57 CET; retest of Oversampling changes on the final installer (c3e7d78), cutoff 20 kHz on a loud sound, "tout est ok", 2026-11-05 about 09:30 CET. Could not be proved from git: red before green for b41560f and a5171b2, where tests and code share a commit; the red runs were seen during the work. Left in `FUTURE.md`: smooth bypass toggle, one crossfade helper, cutoff smoothing independent of the setting, `getTailLengthSeconds`, stereo chain tests, the pre-roll clamp at very low rates. Post-mortem: playbook `docs/plugins/moodzfilter/learning/0012-oversampling.md`.
