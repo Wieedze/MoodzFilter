@@ -27,7 +27,7 @@ Unless stated: 48 kHz, blocks of 512. Every bound marked "to measure" comes from
 | Drive change, sine | equal to the target's output from 20 ms after the change, not before | ± 1 sample, 1e-6 | SPEC (Drive smoothed), same ramp time as Gain out |
 | Non-finite input sample, Asymmetric | later samples finite: the DC blocker keeps no NaN | exact | `.claude/rules/dsp.md` |
 | Stereo | one channel's signal does not reach the other; the same settings on both | 1e-7 | SPEC (linked stereo) |
-| Chain at Off, 2x, 4x, 24 dB, 5 kHz sine, cutoff 20 kHz | largest alias at 4x and at 2x under Off | to measure | `.claude/rules/dsp.md` (nonlinearities are oversampled) |
+| Chain at Off, 2x, 4x, 24 dB, 5 kHz sine, cutoff 20 kHz | largest alias up to 20 kHz: 2x under Off and 4x under 2x, by at least 6 dB each; 4x under −70 dB against the fundamental | to measure | `.claude/rules/dsp.md` (nonlinearities are oversampled) |
 | Chain, block sizes 1, 7, 64, 480, 512, 2048, with a Drive change and a factor change | identical output | 1e-6 | `.claude/rules/dsp.md` |
 | Drive 0 to 24 dB, curve change at 24 dB, Oversampling change at 24 dB, 200 Hz sine, cutoff 20 kHz | click measure at most 20 % above the same setting held steady | to measure | SPEC success criterion 3, post-mortem 0012 (filter wide open, full level) |
 | Drive, Drive curve, Oversampling and Model changed on every block, 2 s of noise, resonance 100 % | every sample finite; RTSan build: no report | exact | `.claude/rules/realtime-audio.md` |
@@ -47,7 +47,7 @@ Unless stated: 48 kHz, blocks of 512. Every bound marked "to measure" comes from
 
 ADR 0009 leaves the DC removal and the smoothing to this task.
 
-* **Curves.** With `g` the drive gain and `u = g x`: Symmetric `tanh(u)`. Asymmetric `(tanh(u + b) − tanh(b)) / (1 − tanh²(b))`, `b = 0.3`: a biased tanh, shifted back to 0 at 0 and divided by its slope at 0, so both curves have the same small signal gain and silence stays silence.
+* **Curves.** With `g` the drive gain and `u = g x`: Symmetric `tanh(u)`. Asymmetric `(tanh(u + b) − tanh(b)) / (1 − tanh²(b))`, `b = 0.3`: a biased tanh, shifted back to 0 at 0 and divided by its slope at 0, so both curves have the same small signal gain and silence stays silence. Written `t / (1 + t tanh(b))`, `t = tanh(u)` (the tanh addition formula): the same curve, exactly 0 at 0 in floats, one tanh per sample shared by both curves.
 * **Transparent at 0 dB.** tanh alone is not transparent, so `y = x + w (shape(u) − x)`, where `w` rises linearly from 0 at 0 dB to 1 at 6 dB. Dry and saturated are in phase, so the blend has no comb.
 * **DC removal.** Only on the Asymmetric part `shape(u) − x`, so the dry signal is never filtered: a DC blocker `y[n] = x[n] − x[n−1] + R y[n−1]` (J. O. Smith, *Introduction to Digital Filters*, "DC Blocker"), `R = exp(−2π fc / fs)`, `fc = 10 Hz`. One per channel.
 * **Smoothing.** Gain, `w` and the blend between the two curves ramp linearly over 20 ms, per sample. A curve change is therefore a 20 ms blend, with no reset and no second filter chain.

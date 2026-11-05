@@ -2,6 +2,7 @@
 
 #include "dsp/CrossfadingFilterBank.h"
 #include "dsp/FilterModels.h"
+#include "dsp/InputDrive.h"
 #include "dsp/Oversampler.h"
 #include "dsp/Realtime.h"
 #include "dsp/WholeSampleDelay.h"
@@ -11,9 +12,9 @@
 
 namespace moodz::dsp
 {
-    // The filter at 1x, 2x or 4x (task 0012, ADR 0009). Each factor owns a crossfading filter
-    // bank prepared at its rate, its oversampler and a delay that completes it to the constant
-    // latency. A factor change resets the incoming path, lets it settle unheard for preRollSamples
+    // The drive and the filter at 1x, 2x or 4x (tasks 0012, 0013, ADR 0009). Each factor owns an
+    // input drive and a crossfading filter bank prepared at its rate, its oversampler and a delay
+    // that completes it to the constant latency. A factor change resets the incoming path, lets it settle unheard for preRollSamples
     // (it starts empty, and its start transient would click), then crossfades the two aligned
     // outputs linearly, all within crossfadeSeconds; a change during a crossfade waits for it to end.
     class OversampledFilterChain
@@ -33,6 +34,8 @@ namespace moodz::dsp
         void select (FilterChoice choice) noexcept MOODZ_NONBLOCKING;
         void setCutoffHz (float hz) noexcept MOODZ_NONBLOCKING;
         void setResonance (float amount) noexcept MOODZ_NONBLOCKING;
+        void setDriveDb (float db) noexcept MOODZ_NONBLOCKING;
+        void setDriveCurveIndex (int index) noexcept MOODZ_NONBLOCKING;
 
         // One or two channels; processes at most as many samples as the shortest span holds.
         void process (std::span<const std::span<float>> channels, int numSamples) noexcept MOODZ_NONBLOCKING;
@@ -41,6 +44,7 @@ namespace moodz::dsp
         struct Path
         {
             Oversampler oversampler;
+            InputDrive drive;
             CrossfadingFilterBank filters;
             WholeSampleDelay delay;
         };
@@ -60,5 +64,7 @@ namespace moodz::dsp
         int crossfadePosition = 0; // samples done; crossfadeLength when no crossfade runs
         float cutoffHz = 1000.0f;
         float resonance = 0.0f;
+        float driveDb = InputDrive::minDb;
+        int driveCurveIndex = InputDrive::defaultCurveIndex;
     };
 }
