@@ -28,6 +28,7 @@ namespace moodz::parameters
         inline constexpr const char* lfoShape = "lfoShape";
         inline constexpr const char* lfoRate = "lfoRate";
         inline constexpr const char* lfoDepth = "lfoDepth";
+        inline constexpr const char* mix = "mix";
     }
 
     // Parameter versions passed to juce::ParameterID, one per wave of additions; the next wave
@@ -40,6 +41,7 @@ namespace moodz::parameters
         inline constexpr int task0012 = 4; // oversampling
         inline constexpr int task0013 = 5; // drive, driveCurve
         inline constexpr int task0015 = 6; // lfoShape, lfoRate, lfoDepth
+        inline constexpr int task0017 = 7; // mix
     }
 
     juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
@@ -90,6 +92,7 @@ namespace moodz::parameters
         int lfoShape = dsp::SyncedLfo::defaultShapeIndex;
         int lfoRate = dsp::SyncedLfo::defaultRateIndex;
         float lfoDepthOctaves = 0.0f;
+        float mix = 1.0f; // 0..1, from the 0..100 % parameter
     };
 
     // Raw atomic values, looked up once so that a snapshot needs no string lookup.
@@ -113,5 +116,6 @@ namespace moodz::parameters
         const std::atomic<float>* lfoShape;
         const std::atomic<float>* lfoRate;
         const std::atomic<float>* lfoDepth;
+        const std::atomic<float>* mix;
     };
 }

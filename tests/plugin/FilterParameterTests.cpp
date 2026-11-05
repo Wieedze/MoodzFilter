@@ -203,6 +203,7 @@ TEST_CASE ("Parameter versions follow the order of addition", "[plugin][paramete
     CHECK (parameter<juce::AudioParameterChoice> (processor, "lfoShape").getVersionHint() == 6);
     CHECK (parameter<juce::AudioParameterChoice> (processor, "lfoRate").getVersionHint() == 6);
     CHECK (parameter<juce::AudioParameterFloat> (processor, "lfoDepth").getVersionHint() == 6);
+    CHECK (parameter<juce::AudioParameterFloat> (processor, "mix").getVersionHint() == 7);
 }
 
 namespace
