@@ -48,8 +48,31 @@ TEST_CASE ("The plugin opens its editor fitted to the screen it knows", "[plugin
     CHECK (dynamic_cast<juce::GenericAudioProcessorEditor*> (editor.get()) != nullptr);
     CHECK (editor->isResizable());
     CHECK (editor->getWidth() == plain.getWidth());
-    const int list = parameterListViewport (*editor)->getViewedComponent()->getHeight();
-    CHECK (editor->getHeight() == editorHeightFor (list, tallestScreenHeight()));
+}
+
+TEST_CASE ("The tallest of several screens decides", "[plugin][ui]")
+{
+    // Task 0016 verifier: the machine's own screens are too tall to show the limit, so the test replaces
+    // JUCE's public list of displays. Screens of 400 and 500 usable pixels, in both orders: 500 - 80 for the
+    // host's title bar is 420, under the list's height, so the scroll bar is back.
+    auto& displays = const_cast<juce::Displays&> (juce::Desktop::getInstance().getDisplays()).displays;
+    const auto saved = displays;
+    for (const bool tallestFirst : { true, false })
+    {
+        INFO ("tallest first " << tallestFirst);
+        juce::Displays::Display shorter, taller;
+        shorter.userBounds = { 0.0f, 0.0f, 800.0f, 400.0f };
+        taller.userBounds = { 0.0f, 0.0f, 800.0f, 500.0f };
+        displays.clearQuick();
+        displays.add (tallestFirst ? taller : shorter);
+        displays.add (tallestFirst ? shorter : taller);
+        CHECK (tallestScreenHeight() == 500);
+        PluginProcessor processor;
+        std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditor());
+        CHECK (editor->getHeight() == 420);
+        CHECK (parameterListViewport (*editor)->getVerticalScrollBar().isVisible());
+    }
+    displays = saved;
 }
 
 TEST_CASE ("The editor's height keeps a margin and a minimum", "[plugin][ui]")

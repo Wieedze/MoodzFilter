@@ -29,7 +29,7 @@ Requested by Maxime after the task 0015 Live test, 2026-11-05.
 
 ## Decision notes
 
-* JUCE sizes the generic editor to at most 400 pixels (`juce_GenericAudioProcessorEditor.cpp`, `jlimit (125, 400, ...)`) with 40 pixels per parameter, so 10 parameters fit and the 13 of today do not. After construction, `createEditor` sets the height from the list's own height: the number of parameters times JUCE's item height.
+* JUCE sizes the generic editor to at most 400 pixels (`juce_GenericAudioProcessorEditor.cpp`, `jlimit (125, 400, ...)`) with 40 pixels per parameter, so 10 parameters fit and the 13 of today do not. After construction, `createEditor` sets the height from the list's own height, as JUCE lays it out (with 13 parameters, 540 pixels: 40 per row and 20 more), so the scroll bar returns only under 620 usable pixels.
 * The height is read from the `TreeView` JUCE builds, not repeated here; a test fails if a JUCE update changes the layout.
 * The screen limit uses the tallest display's usable area, minus 80 pixels for the host's title bar. With no display there is no limit. The tests pass a screen height, so they do not depend on the machine's own screen.
 * **Search done** (`.claude/rules/scope.md` rule 8): JUCE has no option for this height; a patch to JUCE is not worth it for one `setSize`.
